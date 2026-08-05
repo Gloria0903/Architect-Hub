@@ -1,0 +1,289 @@
+"use client";
+
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+
+// ─── Types (mirrored from Prisma enums) ──────────────────────────────────────
+
+export type Role = "ADMIN" | "SENIOR_ARCHITECT" | "ARCHITECT";
+export type ProjectStatus = "ON_TRACK" | "AT_RISK" | "DELAYED" | "COMPLETED";
+export type PaymentStatus = "paid" | "partial" | "overdue" | "pending";
+export type Priority = "LOW" | "MEDIUM" | "HIGH";
+export type CommentType = "FEEDBACK" | "APPROVAL" | "CHANGE_REQUEST" | "QUERY";
+export type NotificationType = "INFO" | "WARNING" | "SUCCESS" | "ERROR";
+
+export interface StaffMember {
+  id: string;
+  name: string;
+  initials: string;
+  email: string;
+  role: Role;
+  phone?: string;
+  department?: string;
+  joinDate: string;
+  _count?: { assignedProjects: number; dailyLogs: number };
+}
+
+export interface Client {
+  id: string;
+  name: string;
+  contactPerson: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  createdAt: string;
+  projects?: Project[];
+}
+
+export interface Project {
+  id: string;
+  sheetNo: string;
+  name: string;
+  clientId: string;
+  client?: Client;
+  location: string;
+  description?: string;
+  status: ProjectStatus;
+  progress: number;
+  architectId?: string;
+  architect?: StaffMember;
+  supervisorId?: string;
+  supervisor?: StaffMember;
+  startDate: string;
+  dueDate: string;
+  budget: number;
+  invoiced: number;
+  paid: number;
+  priority: Priority;
+  assignmentHistory?: AssignmentRecord[];
+  dailyLogs?: DailyLog[];
+  comments?: ClientComment[];
+  payments?: Payment[];
+}
+
+export interface AssignmentRecord {
+  id: string;
+  projectId: string;
+  fromArchitectId?: string;
+  fromArchitect?: { id: string; name: string };
+  toArchitectId: string;
+  toArchitect?: { id: string; name: string };
+  reason?: string;
+  date: string;
+  performedBy?: { id: string; name: string };
+}
+
+export interface DailyLog {
+  id: string;
+  projectId: string;
+  project?: { id: string; name: string; sheetNo: string };
+  authorId: string;
+  author?: { id: string; name: string; initials: string };
+  date: string;
+  workCompleted: string;
+  challenges: string;
+  pendingWork: string;
+  nextActions: string;
+  progress: number;
+  submittedAt: string;
+}
+
+export interface ClientComment {
+  id: string;
+  projectId: string;
+  project?: { id: string; name: string; sheetNo: string };
+  clientId: string;
+  client?: { id: string; name: string };
+  author: string;
+  content: string;
+  type: CommentType;
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export interface Payment {
+  id: string;
+  projectId: string;
+  project?: { id: string; name: string; sheetNo: string };
+  amount: number;
+  date: string;
+  reference?: string;
+  note?: string;
+  recordedBy?: { id: string; name: string };
+}
+
+export interface Notification {
+  id: string;
+  message: string;
+  type: NotificationType;
+  read: boolean;
+  createdAt: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+export function formatKsh(n: number) {
+  return new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(n);
+}
+
+export function statusLabel(s: ProjectStatus) {
+  return { ON_TRACK: "On track", AT_RISK: "At risk", DELAYED: "Delayed", COMPLETED: "Completed" }[s];
+}
+
+export function roleLabel(r: Role) {
+  return { ADMIN: "Admin", SENIOR_ARCHITECT: "Senior Architect", ARCHITECT: "Architect" }[r];
+}
+
+// ─── API helpers ─────────────────────────────────────────────────────────────
+
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Request failed" }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ─── Context ─────────────────────────────────────────────────────────────────
+
+interface AppState {
+  staff: StaffMember[];
+  clients: Client[];
+  projects: Project[];
+  logs: DailyLog[];
+  comments: ClientComment[];
+  payments: Payment[];
+  notifications: Notification[];
+  loading: boolean;
+  error: string | null;
+}
+
+interface AppActions {
+  refresh: () => Promise<void>;
+  addStaff: (s: Omit<StaffMember, "id" | "initials" | "_count"> & { password?: string }) => Promise<void>;
+  updateStaff: (id: string, patch: Partial<StaffMember>) => Promise<void>;
+  removeStaff: (id: string) => Promise<void>;
+  addClient: (c: Omit<Client, "id" | "createdAt" | "projects">) => Promise<void>;
+  addProject: (p: {
+    name: string; clientId: string; location: string; description?: string;
+    architectId?: string; supervisorId?: string; startDate: string; dueDate: string;
+    budget: number; priority: Priority;
+  }) => Promise<void>;
+  updateProject: (id: string, patch: Partial<Project>) => Promise<void>;
+  reassignProject: (projectId: string, toArchitectId: string, reason: string) => Promise<void>;
+  addLog: (l: { projectId: string; workCompleted: string; challenges: string; pendingWork: string; nextActions: string; progress: number }) => Promise<void>;
+  addComment: (c: { projectId: string; clientId: string; author: string; content: string; type: CommentType }) => Promise<void>;
+  resolveComment: (id: string) => Promise<void>;
+  addPayment: (p: { projectId: string; amount: number; date: string; reference?: string; note?: string }) => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
+}
+
+const Ctx = createContext<(AppState & AppActions) | null>(null);
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<AppState>({
+    staff: [], clients: [], projects: [], logs: [],
+    comments: [], payments: [], notifications: [],
+    loading: true, error: null,
+  });
+
+  const refresh = useCallback(async () => {
+    try {
+      setState(s => ({ ...s, loading: true, error: null }));
+      const [staff, clients, projects, logs, comments, payments, notifications] = await Promise.all([
+        apiFetch<StaffMember[]>("/api/staff"),
+        apiFetch<Client[]>("/api/clients"),
+        apiFetch<Project[]>("/api/projects"),
+        apiFetch<DailyLog[]>("/api/logs"),
+        apiFetch<ClientComment[]>("/api/comments"),
+        apiFetch<Payment[]>("/api/payments"),
+        apiFetch<Notification[]>("/api/notifications"),
+      ]);
+      setState({ staff, clients, projects, logs, comments, payments, notifications, loading: false, error: null });
+    } catch (e) {
+      setState(s => ({ ...s, loading: false, error: (e as Error).message }));
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const addStaff = useCallback(async (data: Parameters<AppActions["addStaff"]>[0]) => {
+    await apiFetch("/api/staff", { method: "POST", body: JSON.stringify({ ...data, role: data.role.toUpperCase() }) });
+    await refresh();
+  }, [refresh]);
+
+  const updateStaff = useCallback(async (id: string, patch: Partial<StaffMember>) => {
+    await apiFetch(`/api/staff/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    await refresh();
+  }, [refresh]);
+
+  const removeStaff = useCallback(async (id: string) => {
+    await apiFetch(`/api/staff/${id}`, { method: "DELETE" });
+    await refresh();
+  }, [refresh]);
+
+  const addClient = useCallback(async (data: Parameters<AppActions["addClient"]>[0]) => {
+    await apiFetch("/api/clients", { method: "POST", body: JSON.stringify(data) });
+    await refresh();
+  }, [refresh]);
+
+  const addProject = useCallback(async (data: Parameters<AppActions["addProject"]>[0]) => {
+    await apiFetch("/api/projects", { method: "POST", body: JSON.stringify({ ...data, priority: data.priority.toUpperCase() }) });
+    await refresh();
+  }, [refresh]);
+
+  const updateProject = useCallback(async (id: string, patch: Partial<Project>) => {
+    await apiFetch(`/api/projects/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    await refresh();
+  }, [refresh]);
+
+  const reassignProject = useCallback(async (projectId: string, toArchitectId: string, reason: string) => {
+    await apiFetch(`/api/projects/${projectId}/reassign`, { method: "POST", body: JSON.stringify({ toArchitectId, reason }) });
+    await refresh();
+  }, [refresh]);
+
+  const addLog = useCallback(async (data: Parameters<AppActions["addLog"]>[0]) => {
+    await apiFetch("/api/logs", { method: "POST", body: JSON.stringify(data) });
+    await refresh();
+  }, [refresh]);
+
+  const addComment = useCallback(async (data: Parameters<AppActions["addComment"]>[0]) => {
+    await apiFetch("/api/comments", { method: "POST", body: JSON.stringify({ ...data, type: data.type.toUpperCase() }) });
+    await refresh();
+  }, [refresh]);
+
+  const resolveComment = useCallback(async (id: string) => {
+    await apiFetch(`/api/comments/${id}/resolve`, { method: "POST" });
+    await refresh();
+  }, [refresh]);
+
+  const addPayment = useCallback(async (data: Parameters<AppActions["addPayment"]>[0]) => {
+    await apiFetch("/api/payments", { method: "POST", body: JSON.stringify(data) });
+    await refresh();
+  }, [refresh]);
+
+  const markNotificationRead = useCallback(async (id: string) => {
+    await apiFetch(`/api/notifications/${id}`, { method: "PATCH" });
+    setState(s => ({ ...s, notifications: s.notifications.map(n => n.id === id ? { ...n, read: true } : n) }));
+  }, []);
+
+  return (
+    <Ctx.Provider value={{
+      ...state,
+      refresh, addStaff, updateStaff, removeStaff,
+      addClient, addProject, updateProject, reassignProject,
+      addLog, addComment, resolveComment, addPayment, markNotificationRead,
+    }}>
+      {children}
+    </Ctx.Provider>
+  );
+}
+
+export function useStore() {
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error("useStore must be used within AppProvider");
+  return ctx;
+}

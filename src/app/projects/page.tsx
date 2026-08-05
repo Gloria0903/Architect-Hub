@@ -1,95 +1,214 @@
 "use client";
-
 import { useState } from "react";
 import Link from "next/link";
-import { Topbar } from "@/components/layout/topbar";
+import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
-import { DimensionBar } from "@/components/ui/dimension-bar";
-import { projects, ProjectStatus } from "@/data/mock";
-import { Plus, Repeat } from "lucide-react";
-import { AppShell } from "@/components/layout/app-shell";
+import { Modal } from "@/components/ui/modal";
+import { Input, Select, Textarea, Field, FormRow } from "@/components/ui/form-field";
+import { useStore, formatKsh, ProjectStatus, Priority } from "@/store/app-store";
+import { Plus, Repeat, Eye } from "lucide-react";
 
-const filters: { label: string; value: ProjectStatus | "all" }[] = [
-  { label: "All", value: "all" },
-  { label: "On track", value: "on_track" },
-  { label: "At risk", value: "at_risk" },
-  { label: "Delayed", value: "delayed" },
-];
+type Filter = ProjectStatus | "all";
 
 export default function ProjectsPage() {
-  const [filter, setFilter] = useState<ProjectStatus | "all">("all");
-  const visible = filter === "all" ? projects : projects.filter((p) => p.status === filter);
+  const { projects, staff, clients, addProject, reassignProject } = useStore();
+  const [filter, setFilter] = useState<Filter>("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [reassignTarget, setReassignTarget] = useState<string | null>(null);
+  const [reassignTo, setReassignTo] = useState("");
+  const [reassignReason, setReassignReason] = useState("");
+
+  const architects = staff.filter(s => s.role === "architect" || s.role === "senior_architect");
+  const supervisors = staff.filter(s => s.role === "senior_architect" || s.role === "admin");
+  const visible = filter === "all" ? projects : projects.filter(p => p.status === filter);
+
+  const [form, setForm] = useState({ name: "", clientId: "", location: "", description: "", architectId: "", supervisorId: "", startDate: "", dueDate: "", budget: "", priority: "medium" as Priority });
+
+  function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    addProject({
+      name: form.name, clientId: form.clientId, location: form.location,
+      description: form.description, architectId: form.architectId,
+      supervisorId: form.supervisorId, startDate: form.startDate,
+      dueDate: form.dueDate, budget: Number(form.budget),
+      invoiced: 0, paid: 0, priority: form.priority,
+      status: "on_track", progress: 0,
+    });
+    setCreateOpen(false);
+    setForm({ name: "", clientId: "", location: "", description: "", architectId: "", supervisorId: "", startDate: "", dueDate: "", budget: "", priority: "medium" });
+  }
+
+  function handleReassign() {
+    if (!reassignTarget || !reassignTo) return;
+    reassignProject(reassignTarget, reassignTo, reassignReason);
+    setReassignTarget(null); setReassignTo(""); setReassignReason("");
+  }
+
+  const filters: { label: string; value: Filter }[] = [
+    { label: "All", value: "all" },
+    { label: "On track", value: "on_track" },
+    { label: "At risk", value: "at_risk" },
+    { label: "Delayed", value: "delayed" },
+    { label: "Completed", value: "completed" },
+  ];
 
   return (
     <AppShell>
-    <div>
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="font-display font-bold text-[19px] text-ink">Projects</h1>
-          <p className="text-muted text-[12px] mt-0.5">{projects.length} projects across the firm</p>
-        </div>
-        <button className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium">
-          <Plus size={15} />
-          New project
-        </button>
-      </div>
-
-      <div className="flex items-center gap-1.5 mb-4">
-        {filters.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setFilter(f.value)}
-            className={`px-3 py-1.5 rounded-md text-[12px] border ${
-              filter === f.value
-                ? "bg-ink text-white border-ink"
-                : "bg-surface text-muted border-line"
-            }`}
-          >
-            {f.label}
+      <div>
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h1 className="font-display font-bold text-[20px] text-ink">Projects</h1>
+            <p className="text-muted text-[12px] mt-0.5">{projects.length} projects — click a project to view full details</p>
+          </div>
+          <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90">
+            <Plus size={15} />New project
           </button>
-        ))}
-      </div>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {visible.map((p) => (
-          <Card key={p.id} className="p-4 border-t-[3px]" style={{
-            borderTopColor: p.status === "on_track" ? "#2F7A5E" : p.status === "at_risk" ? "#B07F1F" : "#B5502E"
-          }}>
-            <div className="flex justify-between items-start mb-1">
-              <div>
-                <div className="font-mono text-[11px] text-muted">{p.sheetNo}</div>
-                <Link href={`/projects/${p.id}`}>
-                  <div className="font-display font-semibold text-[15px] text-ink mt-0.5">{p.name}</div>
-                </Link>
-              </div>
-              <StatusPill status={p.status} />
+        <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+          {filters.map(f => (
+            <button key={f.value} onClick={() => setFilter(f.value)}
+              className={`px-3 py-1.5 rounded-md text-[12px] border transition-colors ${filter === f.value ? "bg-ink text-white border-ink" : "bg-surface text-muted border-line hover:border-muted"}`}>
+              {f.label}
+            </button>
+          ))}
+          <span className="ml-auto text-[11px] text-muted font-mono">{visible.length} shown</span>
+        </div>
+
+        <Card className="overflow-hidden">
+          <table className="w-full border-collapse text-[12px]">
+            <thead className="bg-vellum">
+              <tr className="text-muted text-left">
+                <th className="font-medium px-4 py-2.5">Sheet</th>
+                <th className="font-medium px-4 py-2.5">Project</th>
+                <th className="font-medium px-4 py-2.5">Client</th>
+                <th className="font-medium px-4 py-2.5">Architect</th>
+                <th className="font-medium px-4 py-2.5">Budget</th>
+                <th className="font-medium px-4 py-2.5">Progress</th>
+                <th className="font-medium px-4 py-2.5">Status</th>
+                <th className="font-medium px-4 py-2.5">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map(p => {
+                const arch = staff.find(s => s.id === p.architectId);
+                const client = clients.find(c => c.id === p.clientId);
+                return (
+                  <tr key={p.id} className="border-t border-line hover:bg-vellum/40 transition-colors">
+                    <td className="px-4 py-3 font-mono text-[11px] text-muted">{p.sheetNo}</td>
+                    <td className="px-4 py-3">
+                      <div className="text-ink font-medium">{p.name}</div>
+                      <div className="text-muted text-[11px]">{p.location}</div>
+                    </td>
+                    <td className="px-4 py-3 text-muted">{client?.name ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      {arch
+                        ? <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-blueprint-bg text-blueprint text-[9px] font-semibold flex items-center justify-center">{arch.initials}</div><span className="text-ink">{arch.name}</span></div>
+                        : <span className="text-brick text-[11px] font-medium">Unassigned</span>}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-[11px]">{formatKsh(p.budget)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 h-1.5 bg-line rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${p.progress}%`, background: p.status === "on_track" ? "#2F7A5E" : p.status === "at_risk" ? "#B07F1F" : "#B5502E" }} />
+                        </div>
+                        <span className="font-mono text-[11px] text-muted">{p.progress}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3"><StatusPill status={p.status} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/projects/${p.id}`} className="p-1 text-muted hover:text-blueprint transition-colors" title="View"><Eye size={14} /></Link>
+                        <button onClick={() => setReassignTarget(p.id)} className="p-1 text-muted hover:text-brick transition-colors" title="Reassign"><Repeat size={14} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {visible.length === 0 && <div className="text-center py-10 text-muted text-[12.5px]">No projects match this filter.</div>}
+        </Card>
+
+        {/* Create Project Modal */}
+        <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create new project" subtitle="All fields marked * are required" maxWidth="max-w-2xl">
+          <form onSubmit={handleCreate} className="flex flex-col gap-3.5">
+            <FormRow>
+              <Field label="Project name" required><Input required value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Karen Residence" /></Field>
+              <Field label="Client" required>
+                <Select required value={form.clientId} onChange={e => setForm(f=>({...f,clientId:e.target.value}))}>
+                  <option value="">Select client</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </Select>
+              </Field>
+            </FormRow>
+            <Field label="Location" required><Input required value={form.location} onChange={e => setForm(f=>({...f,location:e.target.value}))} placeholder="e.g. Karen, Nairobi" /></Field>
+            <Field label="Description"><Textarea rows={2} value={form.description} onChange={e => setForm(f=>({...f,description:e.target.value}))} placeholder="Brief project description…" /></Field>
+            <FormRow>
+              <Field label="Assign architect">
+                <Select value={form.architectId} onChange={e => setForm(f=>({...f,architectId:e.target.value}))}>
+                  <option value="">Select architect</option>
+                  {architects.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Assign supervisor">
+                <Select value={form.supervisorId} onChange={e => setForm(f=>({...f,supervisorId:e.target.value}))}>
+                  <option value="">Select supervisor</option>
+                  {supervisors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </Select>
+              </Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Start date" required><Input type="date" required value={form.startDate} onChange={e => setForm(f=>({...f,startDate:e.target.value}))} /></Field>
+              <Field label="Due date" required><Input type="date" required value={form.dueDate} onChange={e => setForm(f=>({...f,dueDate:e.target.value}))} /></Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Budget (KSh)" required><Input type="number" required value={form.budget} onChange={e => setForm(f=>({...f,budget:e.target.value}))} placeholder="e.g. 18500000" /></Field>
+              <Field label="Priority">
+                <Select value={form.priority} onChange={e => setForm(f=>({...f,priority:e.target.value as Priority}))}>
+                  <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                </Select>
+              </Field>
+            </FormRow>
+            <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
+              <button type="button" onClick={() => setCreateOpen(false)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Create project</button>
             </div>
-            <div className="text-[11.5px] text-muted mt-1">{p.client} · {p.location}</div>
-            <div className="mt-3.5">
-              <DimensionBar progress={p.progress} status={p.status} />
-            </div>
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-line">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-blueprint-bg text-blueprint flex items-center justify-center text-[10px] font-semibold">
-                  {p.architectInitials}
+          </form>
+        </Modal>
+
+        {/* Reassign Modal */}
+        <Modal open={!!reassignTarget} onClose={() => setReassignTarget(null)} title="Reassign project" subtitle="The new architect gets immediate access to all project history">
+          {reassignTarget && (() => {
+            const p = projects.find(pr => pr.id === reassignTarget)!;
+            const current = staff.find(s => s.id === p.architectId);
+            return (
+              <div className="flex flex-col gap-3.5">
+                <div className="bg-vellum rounded-md p-3 text-[12.5px]">
+                  <div className="text-muted">Project</div>
+                  <div className="text-ink font-medium mt-0.5">{p.sheetNo} — {p.name}</div>
+                  <div className="text-muted mt-2">Currently assigned to</div>
+                  <div className="text-ink font-medium mt-0.5">{current ? current.name : <span className="text-brick">Unassigned</span>}</div>
                 </div>
-                <span className="text-[11.5px] text-muted">{p.architect}</span>
+                <Field label="Reassign to" required>
+                  <Select value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
+                    <option value="">Select architect</option>
+                    {architects.filter(a => a.id !== p.architectId).map(a => <option key={a.id} value={a.id}>{a.name} ({a.activeProjects} active projects)</option>)}
+                  </Select>
+                </Field>
+                <Field label="Reason for reassignment">
+                  <Textarea rows={2} value={reassignReason} onChange={e => setReassignReason(e.target.value)} placeholder="e.g. Architect on leave, workload rebalancing…" />
+                </Field>
+                <div className="flex justify-end gap-2 pt-1 border-t border-line">
+                  <button onClick={() => setReassignTarget(null)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
+                  <button onClick={handleReassign} disabled={!reassignTo} className="px-4 py-2 rounded-md text-[12.5px] bg-brick text-white font-medium disabled:opacity-50">Confirm reassignment</button>
+                </div>
               </div>
-              {p.architect === "Unassigned" && (
-                <Link
-                  href={`/projects/${p.id}`}
-                  className="flex items-center gap-1 text-[11px] text-brick font-medium"
-                >
-                  <Repeat size={12} />
-                  Take over
-                </Link>
-              )}
-            </div>
-          </Card>
-        ))}
+            );
+          })()}
+        </Modal>
       </div>
-    </div>
-  </AppShell>
+    </AppShell>
   );
 }

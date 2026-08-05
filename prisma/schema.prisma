@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  SENIOR_ARCHITECT
+  ARCHITECT
+}
+
+enum ProjectStatus {
+  ON_TRACK
+  AT_RISK
+  DELAYED
+  COMPLETED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum CommentType {
+  FEEDBACK
+  APPROVAL
+  CHANGE_REQUEST
+  QUERY
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  SUCCESS
+  ERROR
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          Role      @default(ARCHITECT)
+  phone         String?
+  department    String?
+  initials      String
+  mfaEnabled    Boolean   @default(false)
+  mfaSecret     String?
+  joinDate      DateTime  @default(now())
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  assignedProjects    Project[]          @relation("ArchitectProjects")
+  supervisedProjects  Project[]          @relation("SupervisorProjects")
+  dailyLogs           DailyLog[]
+  assignmentsMade     AssignmentRecord[] @relation("PerformedByUser")
+  fromAssignments     AssignmentRecord[] @relation("FromArchitect")
+  toAssignments       AssignmentRecord[] @relation("ToArchitect")
+  notifications       Notification[]
+  payments            Payment[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Client {
+  id            String    @id @default(cuid())
+  name          String
+  contactPerson String
+  email         String?
+  phone         String?
+  address       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  projects      Project[]
+  comments      ClientComment[]
+
+  @@index([name])
+}
+
+model Project {
+  id            String        @id @default(cuid())
+  sheetNo       String        @unique
+  name          String
+  description   String?
+  location      String
+  status        ProjectStatus @default(ON_TRACK)
+  progress      Int           @default(0)
+  priority      Priority      @default(MEDIUM)
+  startDate     DateTime
+  dueDate       DateTime
+  completionDate DateTime?
+  budget        Float         @default(0)
+  invoiced      Float         @default(0)
+  paid          Float         @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  clientId      String
+  client        Client             @relation(fields: [clientId], references: [id])
+  architectId   String?
+  architect     User?              @relation("ArchitectProjects", fields: [architectId], references: [id])
+  supervisorId  String?
+  supervisor    User?              @relation("SupervisorProjects", fields: [supervisorId], references: [id])
+
+  dailyLogs         DailyLog[]
+  documents         Document[]
+  comments          ClientComment[]
+  payments          Payment[]
+  assignmentHistory AssignmentRecord[]
+
+  @@index([status])
+  @@index([architectId])
+  @@index([clientId])
+  @@index([sheetNo])
+}
+
+model DailyLog {
+  id            String    @id @default(cuid())
+  date          DateTime
+  workCompleted String
+  challenges    String    @default("")
+  pendingWork   String    @default("")
+  nextActions   String    @default("")
+  progress      Int
+  submittedAt   DateTime  @default(now())
+
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User      @relation(fields: [authorId], references: [id])
+
+  @@unique([projectId, authorId, date])
+  @@index([projectId])
+  @@index([authorId])
+  @@index([date])
+}
+
+model Document {
+  id          String    @id @default(cuid())
+  name        String
+  fileKey     String
+  fileUrl     String
+  fileSize    Int
+  mimeType    String
+  version     Int       @default(1)
+  uploadedAt  DateTime  @default(now())
+
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedById String
+
+  @@index([projectId])
+}
+
+model ClientComment {
+  id          String      @id @default(cuid())
+  content     String
+  type        CommentType @default(FEEDBACK)
+  author      String
+  createdAt   DateTime    @default(now())
+  resolvedAt  DateTime?
+
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clientId    String
+  client      Client      @relation(fields: [clientId], references: [id])
+
+  @@index([projectId])
+  @@index([clientId])
+  @@index([resolvedAt])
+}
+
+model Payment {
+  id          String    @id @default(cuid())
+  amount      Float
+  date        DateTime
+  reference   String?
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  recordedById String
+  recordedBy  User      @relation(fields: [recordedById], references: [id])
+
+  @@index([projectId])
+}
+
+model AssignmentRecord {
+  id          String    @id @default(cuid())
+  reason      String?
+  date        DateTime  @default(now())
+
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromArchitectId String?
+  fromArchitect   User?     @relation("FromArchitect", fields: [fromArchitectId], references: [id])
+  toArchitectId   String
+  toArchitect     User      @relation("ToArchitect", fields: [toArchitectId], references: [id])
+  performedById   String
+  performedBy     User      @relation("PerformedByUser", fields: [performedById], references: [id])
+
+  @@index([projectId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  message   String
+  type      NotificationType @default(INFO)
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}

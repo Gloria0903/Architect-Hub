@@ -1,14 +1,13 @@
 "use client";
-
-import { useState } from "react";
+import { use, useState } from "react";
 import { notFound } from "next/navigation";
+import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
-import { DimensionBar } from "@/components/ui/dimension-bar";
-import { projects, dailyLogs, activity, formatKsh } from "@/data/mock";
-import { Repeat, Upload, FileText, MessageSquare, Wallet, History } from "lucide-react";
-import { use } from "react";
-import { AppShell } from "@/components/layout/app-shell";
+import { Modal } from "@/components/ui/modal";
+import { Select, Textarea, Field } from "@/components/ui/form-field";
+import { useStore, formatKsh } from "@/store/app-store";
+import { Repeat, Upload, FileText, MessageSquare, Wallet, History, CheckCircle, Clock } from "lucide-react";
 
 const tabs = [
   { key: "overview", label: "Overview", icon: FileText },
@@ -17,221 +16,277 @@ const tabs = [
   { key: "comms", label: "Client comms", icon: MessageSquare },
   { key: "finance", label: "Finance", icon: Wallet },
 ] as const;
-
 type TabKey = (typeof tabs)[number]["key"];
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const project = projects.find((p) => p.id === id);
-  const [tab, setTab] = useState<TabKey>("overview");
-  const [takeoverOpen, setTakeoverOpen] = useState(false);
+  const { projects, staff, clients, logs, comments, payments, addPayment, reassignProject, resolveComment } = useStore();
 
+  const project = projects.find(p => p.id === id);
   if (!project) notFound();
 
-  const logs = dailyLogs.filter((l) => l.projectId === project.id);
-  const projectActivity = activity.filter((a) => a.projectId === project.id);
+  const [tab, setTab] = useState<TabKey>("overview");
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [reassignTo, setReassignTo] = useState("");
+  const [reassignReason, setReassignReason] = useState("");
+  const [payForm, setPayForm] = useState({ amount: "", date: "", reference: "", note: "" });
+  const [payOpen, setPayOpen] = useState(false);
+
+  const client = clients.find(c => c.id === project.clientId);
+  const architect = staff.find(s => s.id === project.architectId);
+  const supervisor = staff.find(s => s.id === project.supervisorId);
+  const architects = staff.filter(s => s.role === "architect" || s.role === "senior_architect");
+  const projectLogs = logs.filter(l => l.projectId === project.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const projectComments = comments.filter(c => c.projectId === project.id);
+  const projectPayments = payments.filter(p => p.projectId === project.id);
+
+  function handleReassign() {
+    if (!reassignTo) return;
+    reassignProject(project.id, reassignTo, reassignReason);
+    setReassignOpen(false); setReassignTo(""); setReassignReason("");
+  }
+
+  function handlePayment(e: React.FormEvent) {
+    e.preventDefault();
+    addPayment({ projectId: project.id, amount: Number(payForm.amount), date: payForm.date, reference: payForm.reference, note: payForm.note, recordedBy: "Lewa Mutiso" });
+    setPayOpen(false); setPayForm({ amount: "", date: "", reference: "", note: "" });
+  }
+
+  const outstanding = project.invoiced - project.paid;
 
   return (
     <AppShell>
-    <div>
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <div className="font-mono text-[11.5px] text-muted">{project.sheetNo} — {project.location}</div>
-          <h1 className="font-display font-bold text-[20px] text-ink mt-0.5">{project.name}</h1>
-          <p className="text-muted text-[12.5px] mt-1">{project.client}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <StatusPill status={project.status} className="px-2.5 py-1" />
-          <button
-            onClick={() => setTakeoverOpen(true)}
-            className="flex items-center gap-1.5 bg-brick text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium"
-          >
-            <Repeat size={14} />
-            Take over project
-          </button>
-        </div>
-      </div>
-
-      <Card className="p-4 mb-4">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-[12px]">
+      <div>
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4 gap-4">
           <div>
-            <div className="text-muted mb-1">Architect</div>
-            <div className="text-ink font-medium">{project.architect}</div>
+            <div className="font-mono text-[11.5px] text-muted">{project.sheetNo} · {project.location}</div>
+            <h1 className="font-display font-bold text-[21px] text-ink mt-0.5">{project.name}</h1>
+            <p className="text-muted text-[12.5px] mt-1">{client?.name} — {client?.contactPerson}</p>
           </div>
-          <div>
-            <div className="text-muted mb-1">Supervisor</div>
-            <div className="text-ink font-medium">{project.supervisor}</div>
-          </div>
-          <div>
-            <div className="text-muted mb-1">Due date</div>
-            <div className="text-ink font-medium font-mono">{project.dueDate}</div>
-          </div>
-          <div>
-            <div className="text-muted mb-1">Budget</div>
-            <div className="text-ink font-medium font-mono">{formatKsh(project.budget)}</div>
-          </div>
-          <div>
-            <div className="text-muted mb-1">Priority</div>
-            <div className="text-ink font-medium capitalize">{project.priority}</div>
-          </div>
-        </div>
-        <div className="mt-4 pt-4 border-t border-line">
-          <div className="text-muted text-[12px] mb-2">Progress</div>
-          <DimensionBar progress={project.progress} status={project.status} />
-        </div>
-      </Card>
-
-      <div className="flex items-center gap-1 mb-4 border-b border-line">
-        {tabs.map((t) => {
-          const Icon = t.icon;
-          return (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-[12.5px] border-b-2 -mb-px ${
-                tab === t.key ? "border-blueprint text-ink font-medium" : "border-transparent text-muted"
-              }`}
-            >
-              <Icon size={14} />
-              {t.label}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            <StatusPill status={project.status} className="px-2.5 py-1" />
+            <button onClick={() => setReassignOpen(true)} className="flex items-center gap-1.5 bg-brick text-white rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-brick/90">
+              <Repeat size={14} />Reassign
             </button>
-          );
-        })}
-      </div>
-
-      {tab === "overview" && (
-        <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3">
-          <Card className="p-4">
-            <div className="font-medium text-ink text-[13px] mb-2">Description</div>
-            <p className="text-[12.5px] text-muted leading-relaxed">{project.description}</p>
-          </Card>
-          <Card className="p-4">
-            <div className="font-medium text-ink text-[13px] mb-2.5">Activity timeline</div>
-            <div className="flex flex-col gap-2.5 text-[11.5px]">
-              {projectActivity.length === 0 && <div className="text-muted">No activity recorded yet.</div>}
-              {projectActivity.map((a) => (
-                <div key={a.id} className="flex gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blueprint mt-1.5 shrink-0" />
-                  <div>
-                    <span className="text-ink">{a.actor}</span>{" "}
-                    <span className="text-muted">{a.description.charAt(0).toLowerCase() + a.description.slice(1)}</span>
-                    <div className="text-muted font-mono text-[10.5px] mt-0.5">
-                      {new Date(a.timestamp).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
+          </div>
         </div>
-      )}
 
-      {tab === "logs" && (
-        <div className="flex flex-col gap-3">
-          {logs.length === 0 && (
-            <Card className="p-6 text-center text-muted text-[12.5px]">No daily logs submitted for this project yet.</Card>
-          )}
-          {logs.map((log) => (
-            <Card key={log.id} className="p-4">
-              <div className="flex justify-between items-center mb-2.5">
-                <div className="text-ink font-medium text-[12.5px]">{log.author}</div>
-                <div className="font-mono text-[11px] text-muted">{log.date} · {log.progress}% complete</div>
+        {/* Project meta */}
+        <Card className="p-4 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-[12px]">
+            <div><div className="text-muted mb-1">Architect</div><div className="text-ink font-medium">{architect?.name ?? <span className="text-brick">Unassigned</span>}</div></div>
+            <div><div className="text-muted mb-1">Supervisor</div><div className="text-ink font-medium">{supervisor?.name ?? "—"}</div></div>
+            <div><div className="text-muted mb-1">Start date</div><div className="text-ink font-mono">{project.startDate}</div></div>
+            <div><div className="text-muted mb-1">Due date</div><div className="text-ink font-mono">{project.dueDate}</div></div>
+            <div><div className="text-muted mb-1">Priority</div><div className={`font-medium capitalize ${project.priority === "high" ? "text-brick" : project.priority === "medium" ? "text-ochre" : "text-muted"}`}>{project.priority}</div></div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-line">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-muted text-[12px]">Overall progress</div>
+              <div className="font-mono text-[12px]" style={{color: project.status === "on_track" ? "#2F7A5E" : project.status === "at_risk" ? "#B07F1F" : "#B5502E"}}>{project.progress}%</div>
+            </div>
+            <div className="w-full h-2 bg-line rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all" style={{ width: `${project.progress}%`, background: project.status === "on_track" ? "#2F7A5E" : project.status === "at_risk" ? "#B07F1F" : "#B5502E" }} />
+            </div>
+          </div>
+        </Card>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-0 mb-4 border-b border-line overflow-x-auto">
+          {tabs.map(t => {
+            const Icon = t.icon;
+            return (
+              <button key={t.key} onClick={() => setTab(t.key)} className={`flex items-center gap-1.5 px-3.5 py-2.5 text-[12.5px] border-b-2 -mb-px whitespace-nowrap transition-colors ${tab === t.key ? "border-blueprint text-ink font-medium" : "border-transparent text-muted hover:text-ink"}`}>
+                <Icon size={14} />{t.label}
+                {t.key === "logs" && projectLogs.length > 0 && <span className="ml-1 bg-blueprint-bg text-blueprint text-[10px] rounded-full px-1.5 font-medium">{projectLogs.length}</span>}
+                {t.key === "comms" && projectComments.filter(c=>!c.resolvedAt).length > 0 && <span className="ml-1 bg-brick-bg text-brick text-[10px] rounded-full px-1.5 font-medium">{projectComments.filter(c=>!c.resolvedAt).length}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Overview */}
+        {tab === "overview" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <Card className="p-4">
+              <div className="font-medium text-ink text-[13px] mb-2">Project description</div>
+              <p className="text-[12.5px] text-muted leading-relaxed">{project.description}</p>
+              {project.assignmentHistory.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-line">
+                  <div className="font-medium text-ink text-[12px] mb-2">Reassignment history</div>
+                  {project.assignmentHistory.map(r => {
+                    const from = staff.find(s=>s.id===r.fromArchitectId);
+                    const to = staff.find(s=>s.id===r.toArchitectId);
+                    return (
+                      <div key={r.id} className="text-[11.5px] mb-2">
+                        <span className="text-muted">{r.date}</span> · Reassigned from <span className="text-ink">{from?.name ?? "Unassigned"}</span> to <span className="text-ink">{to?.name}</span>
+                        {r.reason && <div className="text-muted mt-0.5 italic">{r.reason}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+            <Card className="p-4">
+              <div className="font-medium text-ink text-[13px] mb-2">Financial snapshot</div>
+              <div className="grid grid-cols-2 gap-3 text-[12px]">
+                <div><div className="text-muted mb-0.5">Contract value</div><div className="font-mono text-ink">{formatKsh(project.budget)}</div></div>
+                <div><div className="text-muted mb-0.5">Invoiced</div><div className="font-mono text-ink">{formatKsh(project.invoiced)}</div></div>
+                <div><div className="text-muted mb-0.5">Paid</div><div className="font-mono text-moss">{formatKsh(project.paid)}</div></div>
+                <div><div className="text-muted mb-0.5">Outstanding</div><div className="font-mono text-brick">{formatKsh(outstanding)}</div></div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px]">
-                <div>
-                  <div className="text-muted mb-1">Work completed</div>
-                  <p className="text-ink leading-relaxed">{log.workCompleted}</p>
+              <div className="mt-3 pt-3 border-t border-line">
+                <div className="w-full h-2 bg-line rounded-full overflow-hidden">
+                  <div className="h-full bg-moss rounded-full" style={{ width: `${Math.round((project.paid / (project.invoiced||1)) * 100)}%` }} />
                 </div>
-                <div>
-                  <div className="text-muted mb-1">Challenges</div>
-                  <p className="text-ink leading-relaxed">{log.challenges}</p>
-                </div>
-                <div>
-                  <div className="text-muted mb-1">Pending work</div>
-                  <p className="text-ink leading-relaxed">{log.pendingWork}</p>
-                </div>
-                <div>
-                  <div className="text-muted mb-1">Next actions</div>
-                  <p className="text-ink leading-relaxed">{log.nextActions}</p>
-                </div>
+                <div className="text-[11px] text-muted mt-1">{Math.round((project.paid/(project.invoiced||1))*100)}% of invoiced amount received</div>
               </div>
             </Card>
-          ))}
-        </div>
-      )}
+          </div>
+        )}
 
-      {tab === "documents" && (
-        <Card className="p-8 text-center">
-          <Upload size={22} className="mx-auto text-muted mb-2" />
-          <div className="text-ink font-medium text-[13px]">Drag and drop drawings or documents</div>
-          <p className="text-muted text-[12px] mt-1">Supports DWG, DXF, Revit, PDF, images, BOQs, contracts and reports.</p>
-          <button className="mt-3 bg-ink text-white rounded-md px-4 py-2 text-[12px] font-medium">Browse files</button>
-        </Card>
-      )}
+        {/* Daily logs */}
+        {tab === "logs" && (
+          <div className="flex flex-col gap-3">
+            {projectLogs.length === 0 && <Card className="p-8 text-center text-muted text-[12.5px]">No daily logs submitted for this project yet.</Card>}
+            {projectLogs.map(log => {
+              const author = staff.find(s => s.id === log.authorId);
+              return (
+                <Card key={log.id} className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-blueprint-bg text-blueprint text-[10px] font-semibold flex items-center justify-center">{author?.initials}</div>
+                      <div>
+                        <div className="text-ink font-medium text-[12.5px]">{author?.name}</div>
+                        <div className="text-muted text-[11px]">{log.date}</div>
+                      </div>
+                    </div>
+                    <div className="font-mono text-[12px]" style={{color:"#2451C4"}}>{log.progress}% complete</div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px]">
+                    <div><div className="text-muted mb-1 text-[11px] uppercase tracking-wide">Work completed</div><p className="text-ink leading-relaxed">{log.workCompleted}</p></div>
+                    <div><div className="text-muted mb-1 text-[11px] uppercase tracking-wide">Challenges</div><p className="text-ink leading-relaxed">{log.challenges}</p></div>
+                    <div><div className="text-muted mb-1 text-[11px] uppercase tracking-wide">Pending</div><p className="text-ink leading-relaxed">{log.pendingWork}</p></div>
+                    <div><div className="text-muted mb-1 text-[11px] uppercase tracking-wide">Next actions</div><p className="text-ink leading-relaxed">{log.nextActions}</p></div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
 
-      {tab === "comms" && (
-        <Card className="p-6 text-center text-muted text-[12.5px]">
-          No client communications logged yet. Meeting minutes, instructions, and approvals recorded here will be fully searchable.
-        </Card>
-      )}
+        {/* Documents */}
+        {tab === "documents" && (
+          <Card className="p-8 text-center">
+            <Upload size={24} className="mx-auto text-muted mb-3" />
+            <div className="text-ink font-medium text-[13px]">Drag and drop drawings or documents</div>
+            <p className="text-muted text-[12px] mt-1">Supports DWG, DXF, Revit, PDF, images, BOQs, contracts and reports.</p>
+            <p className="text-muted text-[11.5px] mt-1">Version control and revision history available in Phase D.</p>
+            <button className="mt-3 bg-ink text-white rounded-md px-4 py-2 text-[12px] font-medium">Browse files</button>
+          </Card>
+        )}
 
-      {tab === "finance" && (
-        <Card className="p-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px]">
-            <div>
-              <div className="text-muted mb-1">Contract value</div>
-              <div className="font-mono font-medium text-ink">{formatKsh(project.budget)}</div>
+        {/* Client comms */}
+        {tab === "comms" && (
+          <div className="flex flex-col gap-3">
+            {projectComments.length === 0 && <Card className="p-8 text-center text-muted text-[12.5px]">No client communications recorded for this project.</Card>}
+            {projectComments.map(c => (
+              <Card key={c.id} className={`p-4 ${c.resolvedAt ? "opacity-60" : ""}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-ink font-medium text-[13px]">{c.author}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-[3px] font-medium ${c.type === "change_request" ? "bg-brick-bg text-brick" : c.type === "approval" ? "bg-moss-bg text-moss" : c.type === "query" ? "bg-blueprint-bg text-blueprint" : "bg-ochre-bg text-ochre"}`}>{c.type.replace("_"," ")}</span>
+                    </div>
+                    <p className="text-[12.5px] text-ink leading-relaxed">{c.content}</p>
+                    <div className="text-[11px] text-muted mt-2 font-mono">
+                      {new Date(c.createdAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })}
+                      {c.resolvedAt && <span className="ml-3 text-moss">✓ Resolved</span>}
+                    </div>
+                  </div>
+                  {!c.resolvedAt && (
+                    <button onClick={() => resolveComment(c.id)} className="flex items-center gap-1 text-[11px] text-moss border border-moss/30 rounded px-2 py-1 hover:bg-moss-bg shrink-0">
+                      <CheckCircle size={12} />Resolve
+                    </button>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Finance */}
+        {tab === "finance" && (
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Card className="p-3.5"><div className="text-muted text-[11px]">Contract value</div><div className="font-mono font-medium text-[16px] text-ink mt-1">{formatKsh(project.budget)}</div></Card>
+              <Card className="p-3.5"><div className="text-muted text-[11px]">Invoiced</div><div className="font-mono font-medium text-[16px] text-ink mt-1">{formatKsh(project.invoiced)}</div></Card>
+              <Card className="p-3.5"><div className="text-muted text-[11px]">Paid</div><div className="font-mono font-medium text-[16px] text-moss mt-1">{formatKsh(project.paid)}</div></Card>
+              <Card className="p-3.5 cursor-pointer hover:border-moss transition-colors" onClick={() => setPayOpen(true)}>
+                <div className="text-muted text-[11px]">Outstanding</div>
+                <div className="font-mono font-medium text-[16px] text-brick mt-1">{formatKsh(outstanding)}</div>
+                <div className="text-[10.5px] text-moss mt-1">+ Record payment</div>
+              </Card>
             </div>
-            <div>
-              <div className="text-muted mb-1">Invoiced</div>
-              <div className="font-mono font-medium text-ink">{formatKsh(project.invoiced)}</div>
+            <Card className="overflow-hidden">
+              <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+                <div className="font-medium text-ink text-[12.5px]">Payment history</div>
+                <button onClick={() => setPayOpen(true)} className="text-[11.5px] text-moss font-medium">+ Record payment</button>
+              </div>
+              {projectPayments.length === 0
+                ? <div className="p-6 text-center text-muted text-[12.5px]">No payments recorded yet.</div>
+                : projectPayments.map(pay => (
+                  <div key={pay.id} className="px-4 py-3 border-t border-line flex items-center justify-between">
+                    <div>
+                      <div className="text-ink text-[12.5px] font-medium">{pay.note}</div>
+                      <div className="text-muted text-[11.5px] font-mono mt-0.5">{pay.reference} · {pay.date}</div>
+                    </div>
+                    <div className="font-mono text-moss font-medium">{formatKsh(pay.amount)}</div>
+                  </div>
+                ))
+              }
+            </Card>
+          </div>
+        )}
+
+        {/* Reassign Modal */}
+        <Modal open={reassignOpen} onClose={() => setReassignOpen(false)} title="Reassign project" subtitle="New architect gets instant access to all project history">
+          <div className="flex flex-col gap-3.5">
+            <div className="bg-vellum rounded-md p-3 text-[12.5px]">
+              <div className="text-muted">Currently assigned to</div>
+              <div className="text-ink font-medium mt-0.5">{architect?.name ?? <span className="text-brick">Unassigned</span>}</div>
             </div>
-            <div>
-              <div className="text-muted mb-1">Paid</div>
-              <div className="font-mono font-medium text-moss">{formatKsh(project.paid)}</div>
-            </div>
-            <div>
-              <div className="text-muted mb-1">Outstanding</div>
-              <div className="font-mono font-medium text-brick">{formatKsh(project.invoiced - project.paid)}</div>
+            <Field label="Reassign to" required>
+              <Select value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
+                <option value="">Select architect</option>
+                {architects.filter(a => a.id !== project.architectId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Reason">
+              <Textarea rows={2} value={reassignReason} onChange={e => setReassignReason(e.target.value)} placeholder="Reason for reassignment…" />
+            </Field>
+            <div className="flex justify-end gap-2 pt-1 border-t border-line">
+              <button onClick={() => setReassignOpen(false)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
+              <button onClick={handleReassign} disabled={!reassignTo} className="px-4 py-2 rounded-md text-[12.5px] bg-brick text-white font-medium disabled:opacity-50">Confirm</button>
             </div>
           </div>
-        </Card>
-      )}
+        </Modal>
 
-      {takeoverOpen && (
-        <div className="fixed inset-0 bg-ink/40 flex items-center justify-center p-6 z-50">
-          <div className="bg-surface rounded-card max-w-md w-full p-6">
-            <div className="flex items-center gap-2 text-brick font-medium text-[14px] mb-2">
-              <Repeat size={16} />
-              Take over {project.name}
+        {/* Payment Modal */}
+        <Modal open={payOpen} onClose={() => setPayOpen(false)} title="Record payment">
+          <form onSubmit={handlePayment} className="flex flex-col gap-3.5">
+            <Field label="Amount (KSh)" required><input required type="number" value={payForm.amount} onChange={e=>setPayForm(f=>({...f,amount:e.target.value}))} className="w-full border border-line rounded-md px-3 py-2 text-[13px] bg-white outline-none focus:border-blueprint" placeholder="e.g. 2500000" /></Field>
+            <Field label="Payment date" required><input required type="date" value={payForm.date} onChange={e=>setPayForm(f=>({...f,date:e.target.value}))} className="w-full border border-line rounded-md px-3 py-2 text-[13px] bg-white outline-none focus:border-blueprint" /></Field>
+            <Field label="Reference"><input value={payForm.reference} onChange={e=>setPayForm(f=>({...f,reference:e.target.value}))} className="w-full border border-line rounded-md px-3 py-2 text-[13px] bg-white outline-none focus:border-blueprint" placeholder="e.g. INV-A101-003" /></Field>
+            <Field label="Note"><textarea rows={2} value={payForm.note} onChange={e=>setPayForm(f=>({...f,note:e.target.value}))} className="w-full border border-line rounded-md px-3 py-2 text-[13px] bg-white outline-none focus:border-blueprint resize-none" placeholder="e.g. Second stage payment" /></Field>
+            <div className="flex justify-end gap-2 pt-1 border-t border-line">
+              <button type="button" onClick={() => setPayOpen(false)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-moss text-white font-medium">Record payment</button>
             </div>
-            <p className="text-muted text-[12.5px] leading-relaxed mb-4">
-              The new architect will get instant access to every drawing, daily log, client communication,
-              outstanding task, decision, and financial record for this project. Nothing is lost.
-            </p>
-            <label className="text-[12px] text-muted block mb-1.5">Reassign to</label>
-            <select className="w-full border border-line rounded-md px-3 py-2 text-[13px] mb-4 bg-white">
-              <option>Naomi Otieno</option>
-              <option>Samuel Kamau</option>
-            </select>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setTakeoverOpen(false)}
-                className="px-3.5 py-2 rounded-md text-[12.5px] border border-line text-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => setTakeoverOpen(false)}
-                className="px-3.5 py-2 rounded-md text-[12.5px] bg-brick text-white font-medium"
-              >
-                Confirm takeover
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  </AppShell>
+          </form>
+        </Modal>
+      </div>
+    </AppShell>
   );
 }

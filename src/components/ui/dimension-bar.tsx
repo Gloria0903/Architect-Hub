@@ -1,9 +1,10 @@
-import { ProjectStatus } from "@/data/mock";
+import { ProjectStatus } from "@/store/app-store";
 
 const colorMap: Record<ProjectStatus, string> = {
   on_track: "#2F7A5E",
   at_risk: "#B07F1F",
   delayed: "#B5502E",
+  completed: "#2451C4",
 };
 
 export function DimensionBar({ progress, status }: { progress: number; status: ProjectStatus }) {
@@ -14,16 +15,7 @@ export function DimensionBar({ progress, status }: { progress: number; status: P
       <line x1="0" y1="11" x2="200" y2="11" stroke="#DEE3E5" strokeWidth="1" />
       <line x1="0" y1="6" x2="0" y2="16" stroke="#6B7680" strokeWidth="1" />
       <line x1={pct * 2} y1="6" x2={pct * 2} y2="16" stroke={color} strokeWidth="1.5" />
-      <text
-        x={Math.min(Math.max(pct * 2, 14), 186)}
-        y="5"
-        fontFamily="var(--font-plex-mono)"
-        fontSize="9"
-        fill={color}
-        textAnchor="middle"
-      >
-        {pct}%
-      </text>
+      <text x={Math.min(Math.max(pct * 2, 14), 186)} y="5" fontFamily="var(--font-plex-mono)" fontSize="9" fill={color} textAnchor="middle">{pct}%</text>
     </svg>
   );
 }
