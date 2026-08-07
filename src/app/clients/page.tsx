@@ -14,7 +14,7 @@ export default function ClientsPage() {
   const { clients, projects, addClient, updateClient, removeClient } = useStore();
   const { data: session } = useSession();
   const role = session?.user?.role;
-  const canManage = role === "ADMIN" || role === "SENIOR_ARCHITECT";
+  const canManage = role === "ADMIN";
   const isAdmin = role === "ADMIN";
 
   const [open, setOpen] = useState(false);

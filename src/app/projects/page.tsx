@@ -17,7 +17,7 @@ export default function ProjectsPage() {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
-  const canCreate = role === "ADMIN" || role === "SENIOR_ARCHITECT";
+  const canCreate = isAdmin;
 
   const [filter, setFilter] = useState<Filter>("all");
   const [createOpen, setCreateOpen] = useState(false);
@@ -26,9 +26,9 @@ export default function ProjectsPage() {
   const [reassignReason, setReassignReason] = useState("");
   const [createError, setCreateError] = useState("");
 
-  // Architects/senior architects who can be assigned to a project.
-  const architects = staff.filter(s => s.role === "ARCHITECT" || s.role === "SENIOR_ARCHITECT");
-  const supervisors = staff.filter(s => s.role === "SENIOR_ARCHITECT" || s.role === "ADMIN");
+  // Architects who can be assigned to a project.
+  const architects = staff.filter(s => s.role === "ARCHITECT");
+  const supervisors = staff;
   const visible = filter === "all" ? projects : projects.filter(p => p.status === filter);
 
   function projectCount(staffId: string) {
@@ -117,7 +117,7 @@ export default function ProjectsPage() {
               {visible.map(p => {
                 const arch = staff.find(s => s.id === p.architectId);
                 const client = clients.find(c => c.id === p.clientId);
-                const canManageThis = isAdmin || (role === "SENIOR_ARCHITECT" && p.supervisorId === session?.user?.id);
+                const canManageThis = isAdmin;
                 return (
                   <tr key={p.id} className="border-t border-line hover:bg-vellum/40 transition-colors">
                     <td className="px-4 py-3 font-mono text-[11px] text-muted">{p.sheetNo}</td>
@@ -244,5 +244,5 @@ export default function ProjectsPage() {
 }
 
 function roleShort(r: string) {
-  return r === "SENIOR_ARCHITECT" ? "Senior" : r === "ADMIN" ? "Admin" : "Architect";
+  return r === "ADMIN" ? "Admin" : "Architect";
 }

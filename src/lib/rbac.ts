@@ -4,10 +4,15 @@ import type { Prisma } from "@prisma/client";
 /**
  * Role-based access control helpers.
  *
- * Rules:
- *  - ADMIN: full access to everything.
- *  - SENIOR_ARCHITECT: access to projects they are the architect OR supervisor on.
- *  - ARCHITECT: access to projects they are the architect on.
+ * Rules (two roles only):
+ *  - ADMIN: full access to everything — user management, client management,
+ *    project creation/reassignment, payments, all reports.
+ *  - ARCHITECT: scoped strictly to projects they are the architect OR
+ *    supervisor on. Cannot manage staff, clients, payments, or reassignment.
+ *
+ * These functions are the single source of truth for authorization checks.
+ * Every API route must call the relevant helper server-side — never rely on
+ * hiding a button in the UI as the actual security boundary.
  */
 
 export function isAdmin(session: Session): boolean {
@@ -19,11 +24,19 @@ export function canManageStaff(session: Session): boolean {
 }
 
 export function canManageClients(session: Session): boolean {
-  return session.user.role === "ADMIN" || session.user.role === "SENIOR_ARCHITECT";
+  return session.user.role === "ADMIN";
 }
 
 export function canCreateProjects(session: Session): boolean {
-  return session.user.role === "ADMIN" || session.user.role === "SENIOR_ARCHITECT";
+  return session.user.role === "ADMIN";
+}
+
+export function canReassignProjects(session: Session): boolean {
+  return session.user.role === "ADMIN";
+}
+
+export function canRecordPayments(session: Session): boolean {
+  return session.user.role === "ADMIN";
 }
 
 /** Prisma `where` clause fragment that scopes projects to what this user may see. */

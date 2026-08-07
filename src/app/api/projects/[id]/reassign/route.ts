@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { canAccessProject } from "@/lib/rbac";
+import { canReassignProjects } from "@/lib/rbac";
 import { z } from "zod";
 
 const Schema = z.object({
@@ -13,8 +13,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const role = session.user.role;
-  if (role !== "ADMIN" && role !== "SENIOR_ARCHITECT") {
+  if (!canReassignProjects(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -26,14 +25,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Senior architects may only reassign projects they supervise; admins can reassign any.
-  if (role === "SENIOR_ARCHITECT" && !canAccessProject(session, project)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const toArchitect = await prisma.user.findUnique({ where: { id: parsed.data.toArchitectId } });
-  if (!toArchitect || toArchitect.role === "ADMIN") {
-    return NextResponse.json({ error: "Can only assign to an architect or senior architect" }, { status: 400 });
+  if (!toArchitect || toArchitect.role !== "ARCHITECT") {
+    return NextResponse.json({ error: "Can only assign to an architect" }, { status: 400 });
   }
 
   const [updated] = await prisma.$transaction([

@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { canManageStaff } from "@/lib/rbac";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { generateTemporaryPassword, validatePassword } from "@/lib/password-policy";
 
 const Schema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
-  role: z.enum(["ADMIN", "SENIOR_ARCHITECT", "ARCHITECT"]),
+  role: z.enum(["ADMIN", "ARCHITECT"]),
   phone: z.string().optional(),
   department: z.string().optional(),
-  password: z.string().min(8).optional(),
+  // Admins may optionally set an explicit initial password; otherwise one is
+  // generated and returned once in the response (never emailed in cleartext
+  // unless an email provider is later wired up).
+  password: z.string().optional(),
 });
 
 export async function GET() {
@@ -21,7 +26,7 @@ export async function GET() {
     select: {
       id: true, name: true, email: true, role: true,
       phone: true, department: true, initials: true,
-      joinDate: true, lastLoginAt: true,
+      joinDate: true, lastLoginAt: true, isActive: true, mustResetPassword: true,
       _count: {
         select: {
           assignedProjects: true,
@@ -39,7 +44,9 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (session.user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Only the Administrator may create accounts. There is no public
+  // registration path anywhere in this app — this is the single entry point.
+  if (!canManageStaff(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   const parsed = Schema.safeParse(body);
@@ -48,6 +55,14 @@ export async function POST(req: NextRequest) {
   const existing = await prisma.user.findUnique({ where: { email: parsed.data.email } });
   if (existing) return NextResponse.json({ error: "Email already registered" }, { status: 409 });
 
+  let tempPassword: string | undefined;
+  if (parsed.data.password) {
+    const check = validatePassword(parsed.data.password);
+    if (!check.valid) return NextResponse.json({ error: check.errors.join(" ") }, { status: 400 });
+  } else {
+    tempPassword = generateTemporaryPassword();
+  }
+
   const initials = parsed.data.name
     .split(" ")
     .map((w) => w[0])
@@ -55,7 +70,7 @@ export async function POST(req: NextRequest) {
     .slice(0, 2)
     .toUpperCase();
 
-  const hashedPassword = await bcrypt.hash(parsed.data.password ?? "TempPass123!", 12);
+  const hashedPassword = await bcrypt.hash(parsed.data.password ?? tempPassword!, 12);
 
   const user = await prisma.user.create({
     data: {
@@ -66,12 +81,16 @@ export async function POST(req: NextRequest) {
       phone: parsed.data.phone,
       department: parsed.data.department,
       initials,
+      mustResetPassword: true,
     },
     select: {
       id: true, name: true, email: true, role: true,
       phone: true, department: true, initials: true, joinDate: true,
+      isActive: true, mustResetPassword: true,
     },
   });
 
-  return NextResponse.json(user, { status: 201 });
+  // tempPassword is only ever returned here, once, over an authenticated
+  // admin-only connection — it is never stored in plaintext or logged.
+  return NextResponse.json({ ...user, temporaryPassword: tempPassword }, { status: 201 });
 }

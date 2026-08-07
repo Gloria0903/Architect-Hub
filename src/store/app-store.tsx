@@ -1,10 +1,10 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
-
+import { useSession } from "next-auth/react";
 // ─── Types (mirrored from Prisma enums) ──────────────────────────────────────
 
-export type Role = "ADMIN" | "SENIOR_ARCHITECT" | "ARCHITECT";
+export type Role = "ADMIN" | "ARCHITECT";
 export type ProjectStatus = "ON_TRACK" | "AT_RISK" | "DELAYED" | "COMPLETED";
 export type PaymentStatus = "paid" | "partial" | "overdue" | "pending";
 export type Priority = "LOW" | "MEDIUM" | "HIGH";
@@ -20,6 +20,8 @@ export interface StaffMember {
   phone?: string;
   department?: string;
   joinDate: string;
+  isActive?: boolean;
+  mustResetPassword?: boolean;
   _count?: { assignedProjects: number; dailyLogs: number };
 }
 
@@ -144,7 +146,7 @@ export function statusLabel(s: ProjectStatus) {
 }
 
 export function roleLabel(r: Role) {
-  return { ADMIN: "Admin", SENIOR_ARCHITECT: "Senior Architect", ARCHITECT: "Architect" }[r];
+  return { ADMIN: "Admin", ARCHITECT: "Architect" }[r];
 }
 
 export function commentTypeLabel(t: CommentType) {
@@ -166,12 +168,25 @@ export function formatFileSize(bytes: number) {
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     ...options,
   });
+
+  const contentType = res.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Request failed" }));
+    if (res.status === 401) {
+    throw new Error("Unauthorized");
+}
+    const err = isJson ? await res.json().catch(() => ({ error: "Request failed" })) : { error: `Request failed (HTTP ${res.status})` };
     throw new Error(err.error || `HTTP ${res.status}`);
   }
+
+  if (!isJson) {
+    throw new Error("Server returned an unexpected non-JSON response. Please try again.");
+  }
+
   return res.json();
 }
 
@@ -192,8 +207,8 @@ interface AppState {
 
 interface AppActions {
   refresh: () => Promise<void>;
-  addStaff: (s: Omit<StaffMember, "id" | "initials" | "_count" | "joinDate"> & { password?: string }) => Promise<void>;
-  updateStaff: (id: string, patch: Partial<StaffMember> & { password?: string }) => Promise<void>;
+  addStaff: (s: Omit<StaffMember, "id" | "initials" | "_count" | "joinDate"> & { password?: string }) => Promise<{ temporaryPassword?: string }>;
+  updateStaff: (id: string, patch: Partial<StaffMember> & { password?: string; currentPassword?: string; resetPassword?: boolean }) => Promise<{ temporaryPassword?: string }>;
   removeStaff: (id: string) => Promise<void>;
   addClient: (c: Omit<Client, "id" | "createdAt" | "projects">) => Promise<void>;
   updateClient: (id: string, patch: Partial<Client>) => Promise<void>;
@@ -218,6 +233,7 @@ interface AppActions {
 const Ctx = createContext<(AppState & AppActions) | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { status } = useSession();
   const [state, setState] = useState<AppState>({
     staff: [], clients: [], projects: [], logs: [],
     comments: [], payments: [], notifications: [], documents: [],
@@ -243,16 +259,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+  if (status === "authenticated") {
+    refresh();
+  }
 
+  if (status === "unauthenticated") {
+    setState((s) => ({
+      ...s,
+      loading: false,
+    }));
+  }
+}, [status, refresh]);
   const addStaff = useCallback(async (data: Parameters<AppActions["addStaff"]>[0]) => {
-    await apiFetch("/api/staff", { method: "POST", body: JSON.stringify({ ...data, role: data.role.toUpperCase() }) });
+    const result = await apiFetch<{ temporaryPassword?: string }>("/api/staff", { method: "POST", body: JSON.stringify({ ...data, role: data.role.toUpperCase() }) });
     await refresh();
+    return result;
   }, [refresh]);
 
-  const updateStaff = useCallback(async (id: string, patch: Partial<StaffMember> & { password?: string }) => {
-    await apiFetch(`/api/staff/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  const updateStaff = useCallback(async (id: string, patch: Parameters<AppActions["updateStaff"]>[1]) => {
+    const result = await apiFetch<{ temporaryPassword?: string }>(`/api/staff/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
     await refresh();
+    return result;
   }, [refresh]);
 
   const removeStaff = useCallback(async (id: string) => {

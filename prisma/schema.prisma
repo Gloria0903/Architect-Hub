@@ -11,7 +11,6 @@ datasource db {
 
 enum Role {
   ADMIN
-  SENIOR_ARCHITECT
   ARCHITECT
 }
 
@@ -57,6 +56,11 @@ model User {
   mfaSecret     String?
   joinDate      DateTime  @default(now())
   lastLoginAt   DateTime?
+  isActive      Boolean   @default(true)
+  mustResetPassword Boolean @default(false)
+  failedLoginAttempts Int  @default(0)
+  lockedUntil   DateTime?
+  passwordChangedAt DateTime @default(now())
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -69,9 +73,40 @@ model User {
   toAssignments       AssignmentRecord[] @relation("ToArchitect")
   notifications       Notification[]
   payments            Payment[]
+  loginEvents         LoginEvent[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([email])
   @@index([role])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model LoginEvent {
+  id        String   @id @default(cuid())
+  success   Boolean
+  ip        String?
+  userAgent String?
+  reason    String?
+  createdAt DateTime @default(now())
+
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Client {

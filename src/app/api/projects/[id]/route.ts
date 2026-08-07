@@ -75,7 +75,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const data = parsed.data;
 
-  // Only admins / senior architects may edit budget & invoiced figures.
+  // Only admins may edit budget & invoiced figures.
   if ((data.budget !== undefined || data.invoiced !== undefined) && session.user.role === "ARCHITECT") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

@@ -35,7 +35,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
-  const canManage = isAdmin || (role === "SENIOR_ARCHITECT" && project.supervisorId === session?.user?.id);
+  const canEdit = isAdmin || project.architectId === session?.user?.id || project.supervisorId === session?.user?.id;
+  const canReassign = isAdmin;
 
   const [tab, setTab] = useState<TabKey>("overview");
   const [reassignOpen, setReassignOpen] = useState(false);
@@ -56,7 +57,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const client = clients.find(c => c.id === project.clientId);
   const architect = staff.find(s => s.id === project.architectId);
   const supervisor = staff.find(s => s.id === project.supervisorId);
-  const architects = staff.filter(s => s.role === "ARCHITECT" || s.role === "SENIOR_ARCHITECT");
+  const architects = staff.filter(s => s.role === "ARCHITECT");
   const projectLogs = logs.filter(l => l.projectId === project.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const projectComments = comments.filter(c => c.projectId === project.id);
   const projectPayments = payments.filter(p => p.projectId === project.id);
@@ -121,15 +122,15 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
             <StatusPill status={project.status} className="px-2.5 py-1" />
-            {canManage && (
-              <>
-                <button onClick={() => setEditOpen(true)} className="flex items-center gap-1.5 border border-line text-ink rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-vellum">
-                  <Pencil size={14} />Edit
-                </button>
-                <button onClick={() => setReassignOpen(true)} className="flex items-center gap-1.5 bg-brick text-white rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-brick/90">
-                  <Repeat size={14} />Reassign
-                </button>
-              </>
+            {canEdit && (
+              <button onClick={() => setEditOpen(true)} className="flex items-center gap-1.5 border border-line text-ink rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-vellum">
+                <Pencil size={14} />Edit
+              </button>
+            )}
+            {canReassign && (
+              <button onClick={() => setReassignOpen(true)} className="flex items-center gap-1.5 bg-brick text-white rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-brick/90">
+                <Repeat size={14} />Reassign
+              </button>
             )}
             {isAdmin && (
               <button onClick={handleDeleteProject} className="flex items-center gap-1.5 border border-line text-brick rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-brick-bg">

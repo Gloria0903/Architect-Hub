@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, canRecordPayments } from "@/lib/rbac";
 import { z } from "zod";
 
 const Schema = z.object({
@@ -40,8 +40,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const role = session.user.role;
-  if (role !== "ADMIN" && role !== "SENIOR_ARCHITECT") {
+  if (!canRecordPayments(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

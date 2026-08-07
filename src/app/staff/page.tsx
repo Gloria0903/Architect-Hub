@@ -10,7 +10,6 @@ import { Plus, Trash2, Edit2, ShieldAlert } from "lucide-react";
 
 const roleColors: Record<Role, string> = {
   ADMIN: "bg-blueprint-bg text-blueprint",
-  SENIOR_ARCHITECT: "bg-moss-bg text-moss",
   ARCHITECT: "bg-ochre-bg text-ochre",
 };
 
@@ -21,14 +20,17 @@ export default function StaffPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", role: "ARCHITECT" as Role, department: "", password: "" });
+  const [tempPasswordNotice, setTempPasswordNotice] = useState<{ name: string; password: string } | null>(null);
 
   function resetForm() { setForm({ name: "", email: "", phone: "", role: "ARCHITECT", department: "", password: "" }); }
 
-  function handleCreate(e: React.FormEvent) {
+  async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     const { password, ...rest } = form;
-    addStaff({ ...rest, password: password || undefined });
-    setCreateOpen(false); resetForm();
+    const result = await addStaff({ ...rest, password: password || undefined });
+    setCreateOpen(false);
+    if (result.temporaryPassword) setTempPasswordNotice({ name: form.name, password: result.temporaryPassword });
+    resetForm();
   }
 
   function openEdit(id: string) {
@@ -37,13 +39,22 @@ export default function StaffPage() {
     setEditTarget(id);
   }
 
-  function handleEdit(e: React.FormEvent) {
+  async function handleEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editTarget) return;
     const initials = form.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
     const { password, ...rest } = form;
-    updateStaff(editTarget, { ...rest, initials, ...(password ? { password } : {}) });
+    await updateStaff(editTarget, { ...rest, initials, ...(password ? { password } : {}) });
     setEditTarget(null); resetForm();
+  }
+
+  async function handleToggleActive(member: (typeof staff)[number]) {
+    await updateStaff(member.id, { isActive: !(member.isActive ?? true) });
+  }
+
+  async function handleForceReset(member: (typeof staff)[number]) {
+    const result = await updateStaff(member.id, { resetPassword: true });
+    if (result.temporaryPassword) setTempPasswordNotice({ name: member.name, password: result.temporaryPassword });
   }
 
   if (!isAdmin) {
@@ -85,6 +96,7 @@ export default function StaffPage() {
                     </div>
                   </div>
                   <div className="flex gap-1.5">
+                    <button onClick={() => handleForceReset(member)} title="Force password reset" className="p-1.5 text-muted hover:text-blueprint transition-colors"><ShieldAlert size={14} /></button>
                     <button onClick={() => openEdit(member.id)} className="p-1.5 text-muted hover:text-blueprint transition-colors"><Edit2 size={14} /></button>
                     {member.role !== "ADMIN" && (
                       <button onClick={() => removeStaff(member.id)} className="p-1.5 text-muted hover:text-brick transition-colors"><Trash2 size={14} /></button>
@@ -93,7 +105,15 @@ export default function StaffPage() {
                 </div>
                 <div className="mt-3 pt-3 border-t border-line flex items-center justify-between">
                   <span className={`text-[10.5px] px-2 py-0.5 rounded-[3px] font-medium ${roleColors[member.role]}`}>{roleLabel(member.role)}</span>
-                  <span className="text-[11px] text-muted">{member.department}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleToggleActive(member)}
+                      className={`text-[10.5px] px-2 py-0.5 rounded-[3px] font-medium ${member.isActive === false ? "bg-brick-bg text-brick" : "bg-moss-bg text-moss"}`}
+                    >
+                      {member.isActive === false ? "Deactivated" : "Active"}
+                    </button>
+                    <span className="text-[11px] text-muted">{member.department}</span>
+                  </div>
                 </div>
                 <div className="mt-2.5 grid grid-cols-2 gap-2 text-[11.5px]">
                   <div><div className="text-muted text-[11px]">Phone</div><div className="text-ink">{member.phone}</div></div>
@@ -127,14 +147,13 @@ export default function StaffPage() {
               <Field label="Role" required>
                 <Select required value={form.role} onChange={e => setForm(f=>({...f,role:e.target.value as Role}))}>
                   <option value="ARCHITECT">Architect</option>
-                  <option value="SENIOR_ARCHITECT">Senior Architect</option>
                   <option value="ADMIN">Admin</option>
                 </Select>
               </Field>
               <Field label="Department"><Input value={form.department} onChange={e => setForm(f=>({...f,department:e.target.value}))} placeholder="e.g. Design" /></Field>
             </FormRow>
-            <Field label="Temporary password"><Input type="text" value={form.password} onChange={e => setForm(f=>({...f,password:e.target.value}))} placeholder="Leave blank to use default temp password" /></Field>
-            <p className="text-[11px] text-muted -mt-2">This becomes their login password (with their email as username). Share it with them securely — they should change it after first login.</p>
+            <Field label="Initial password (optional)"><Input type="text" value={form.password} onChange={e => setForm(f=>({...f,password:e.target.value}))} placeholder="Leave blank to auto-generate a secure temp password" /></Field>
+            <p className="text-[11px] text-muted -mt-2">They must reset this on first login. If left blank, a secure temporary password is generated and shown once after creation — share it with them securely.</p>
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => { setCreateOpen(false); resetForm(); }} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Add member</button>
@@ -154,18 +173,37 @@ export default function StaffPage() {
               <Field label="Role">
                 <Select value={form.role} onChange={e => setForm(f=>({...f,role:e.target.value as Role}))}>
                   <option value="ARCHITECT">Architect</option>
-                  <option value="SENIOR_ARCHITECT">Senior Architect</option>
                   <option value="ADMIN">Admin</option>
                 </Select>
               </Field>
               <Field label="Department"><Input value={form.department} onChange={e => setForm(f=>({...f,department:e.target.value}))} /></Field>
             </FormRow>
-            <Field label="Reset password"><Input type="text" value={form.password} onChange={e => setForm(f=>({...f,password:e.target.value}))} placeholder="Leave blank to keep current password" /></Field>
+            <Field label="Set specific password (optional)"><Input type="text" value={form.password} onChange={e => setForm(f=>({...f,password:e.target.value}))} placeholder="Leave blank to keep current password" /></Field>
+            <p className="text-[11px] text-muted -mt-2">To generate a fresh temporary password instead, use the shield icon on their card and cancel this dialog.</p>
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => { setEditTarget(null); resetForm(); }} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Save changes</button>
             </div>
           </form>
+        </Modal>
+
+        {/* Temporary password notice */}
+        <Modal open={!!tempPasswordNotice} onClose={() => setTempPasswordNotice(null)} title="Temporary password generated">
+          <div className="flex flex-col gap-3">
+            <p className="text-muted text-[12.5px]">
+              A temporary password was generated for <span className="text-ink font-medium">{tempPasswordNotice?.name}</span>. It will only be shown once here — copy it and share it securely. They will be required to change it on first login.
+            </p>
+            <div className="bg-vellum border border-line rounded-md px-3 py-2.5 font-mono text-[14px] text-ink select-all">
+              {tempPasswordNotice?.password}
+            </div>
+            <button
+              type="button"
+              onClick={() => setTempPasswordNotice(null)}
+              className="self-end px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium"
+            >
+              Done
+            </button>
+          </div>
         </Modal>
       </div>
     </AppShell>
