@@ -119,6 +119,20 @@ export interface Notification {
   createdAt: string;
 }
 
+export interface Document {
+  id: string;
+  name: string;
+  fileKey: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  version: number;
+  uploadedAt: string;
+  projectId: string;
+  project?: { id: string; name: string; sheetNo: string };
+  uploadedById: string;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 export function formatKsh(n: number) {
@@ -131,6 +145,20 @@ export function statusLabel(s: ProjectStatus) {
 
 export function roleLabel(r: Role) {
   return { ADMIN: "Admin", SENIOR_ARCHITECT: "Senior Architect", ARCHITECT: "Architect" }[r];
+}
+
+export function commentTypeLabel(t: CommentType) {
+  return { FEEDBACK: "Feedback", APPROVAL: "Approval", CHANGE_REQUEST: "Change request", QUERY: "Query" }[t];
+}
+
+export function priorityLabel(p: Priority) {
+  return { LOW: "Low", MEDIUM: "Medium", HIGH: "High" }[p];
+}
+
+export function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
@@ -157,28 +185,34 @@ interface AppState {
   comments: ClientComment[];
   payments: Payment[];
   notifications: Notification[];
+  documents: Document[];
   loading: boolean;
   error: string | null;
 }
 
 interface AppActions {
   refresh: () => Promise<void>;
-  addStaff: (s: Omit<StaffMember, "id" | "initials" | "_count"> & { password?: string }) => Promise<void>;
-  updateStaff: (id: string, patch: Partial<StaffMember>) => Promise<void>;
+  addStaff: (s: Omit<StaffMember, "id" | "initials" | "_count" | "joinDate"> & { password?: string }) => Promise<void>;
+  updateStaff: (id: string, patch: Partial<StaffMember> & { password?: string }) => Promise<void>;
   removeStaff: (id: string) => Promise<void>;
   addClient: (c: Omit<Client, "id" | "createdAt" | "projects">) => Promise<void>;
+  updateClient: (id: string, patch: Partial<Client>) => Promise<void>;
+  removeClient: (id: string) => Promise<void>;
   addProject: (p: {
     name: string; clientId: string; location: string; description?: string;
     architectId?: string; supervisorId?: string; startDate: string; dueDate: string;
     budget: number; priority: Priority;
   }) => Promise<void>;
   updateProject: (id: string, patch: Partial<Project>) => Promise<void>;
+  removeProject: (id: string) => Promise<void>;
   reassignProject: (projectId: string, toArchitectId: string, reason: string) => Promise<void>;
   addLog: (l: { projectId: string; workCompleted: string; challenges: string; pendingWork: string; nextActions: string; progress: number }) => Promise<void>;
   addComment: (c: { projectId: string; clientId: string; author: string; content: string; type: CommentType }) => Promise<void>;
   resolveComment: (id: string) => Promise<void>;
   addPayment: (p: { projectId: string; amount: number; date: string; reference?: string; note?: string }) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
+  uploadDocument: (projectId: string, file: File) => Promise<void>;
+  removeDocument: (id: string) => Promise<void>;
 }
 
 const Ctx = createContext<(AppState & AppActions) | null>(null);
@@ -186,14 +220,14 @@ const Ctx = createContext<(AppState & AppActions) | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({
     staff: [], clients: [], projects: [], logs: [],
-    comments: [], payments: [], notifications: [],
+    comments: [], payments: [], notifications: [], documents: [],
     loading: true, error: null,
   });
 
   const refresh = useCallback(async () => {
     try {
       setState(s => ({ ...s, loading: true, error: null }));
-      const [staff, clients, projects, logs, comments, payments, notifications] = await Promise.all([
+      const [staff, clients, projects, logs, comments, payments, notifications, documents] = await Promise.all([
         apiFetch<StaffMember[]>("/api/staff"),
         apiFetch<Client[]>("/api/clients"),
         apiFetch<Project[]>("/api/projects"),
@@ -201,8 +235,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         apiFetch<ClientComment[]>("/api/comments"),
         apiFetch<Payment[]>("/api/payments"),
         apiFetch<Notification[]>("/api/notifications"),
+        apiFetch<Document[]>("/api/documents"),
       ]);
-      setState({ staff, clients, projects, logs, comments, payments, notifications, loading: false, error: null });
+      setState({ staff, clients, projects, logs, comments, payments, notifications, documents, loading: false, error: null });
     } catch (e) {
       setState(s => ({ ...s, loading: false, error: (e as Error).message }));
     }
@@ -215,7 +250,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await refresh();
   }, [refresh]);
 
-  const updateStaff = useCallback(async (id: string, patch: Partial<StaffMember>) => {
+  const updateStaff = useCallback(async (id: string, patch: Partial<StaffMember> & { password?: string }) => {
     await apiFetch(`/api/staff/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
     await refresh();
   }, [refresh]);
@@ -230,6 +265,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await refresh();
   }, [refresh]);
 
+  const updateClient = useCallback(async (id: string, patch: Partial<Client>) => {
+    await apiFetch(`/api/clients/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    await refresh();
+  }, [refresh]);
+
+  const removeClient = useCallback(async (id: string) => {
+    await apiFetch(`/api/clients/${id}`, { method: "DELETE" });
+    await refresh();
+  }, [refresh]);
+
   const addProject = useCallback(async (data: Parameters<AppActions["addProject"]>[0]) => {
     await apiFetch("/api/projects", { method: "POST", body: JSON.stringify({ ...data, priority: data.priority.toUpperCase() }) });
     await refresh();
@@ -237,6 +282,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateProject = useCallback(async (id: string, patch: Partial<Project>) => {
     await apiFetch(`/api/projects/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    await refresh();
+  }, [refresh]);
+
+  const removeProject = useCallback(async (id: string) => {
+    await apiFetch(`/api/projects/${id}`, { method: "DELETE" });
     await refresh();
   }, [refresh]);
 
@@ -270,12 +320,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, notifications: s.notifications.map(n => n.id === id ? { ...n, read: true } : n) }));
   }, []);
 
+  const uploadDocument = useCallback(async (projectId: string, file: File) => {
+    const form = new FormData();
+    form.append("projectId", projectId);
+    form.append("file", file);
+    const res = await fetch("/api/documents", { method: "POST", body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Upload failed" }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    await refresh();
+  }, [refresh]);
+
+  const removeDocument = useCallback(async (id: string) => {
+    await apiFetch(`/api/documents/${id}`, { method: "DELETE" });
+    await refresh();
+  }, [refresh]);
+
   return (
     <Ctx.Provider value={{
       ...state,
       refresh, addStaff, updateStaff, removeStaff,
-      addClient, addProject, updateProject, reassignProject,
+      addClient, updateClient, removeClient,
+      addProject, updateProject, removeProject, reassignProject,
       addLog, addComment, resolveComment, addPayment, markNotificationRead,
+      uploadDocument, removeDocument,
     }}>
       {children}
     </Ctx.Provider>

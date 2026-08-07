@@ -1,10 +1,10 @@
 import { ProjectStatus } from "@/store/app-store";
 
 const colorMap: Record<ProjectStatus, string> = {
-  on_track: "#2F7A5E",
-  at_risk: "#B07F1F",
-  delayed: "#B5502E",
-  completed: "#2451C4",
+  ON_TRACK: "#2F7A5E",
+  AT_RISK: "#B07F1F",
+  DELAYED: "#B5502E",
+  COMPLETED: "#2451C4",
 };
 
 export function DimensionBar({ progress, status }: { progress: number; status: ProjectStatus }) {

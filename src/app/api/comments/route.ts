@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { CommentType } from "@prisma/client";
+import { isAdmin } from "@/lib/rbac";
 import { z } from "zod";
 
 const Schema = z.object({
@@ -24,6 +25,9 @@ export async function GET(req: NextRequest) {
     where: {
       ...(projectId && { projectId }),
       ...(unresolved && { resolvedAt: null }),
+      ...(!isAdmin(session) && {
+        project: { OR: [{ architectId: session.user.id }, { supervisorId: session.user.id }] },
+      }),
     },
     include: {
       project: { select: { id: true, name: true, sheetNo: true } },

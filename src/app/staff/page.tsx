@@ -1,35 +1,39 @@
 "use client";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Input, Select, Field, FormRow } from "@/components/ui/form-field";
 import { useStore, roleLabel, Role } from "@/store/app-store";
-import { Plus, Trash2, Edit2 } from "lucide-react";
+import { Plus, Trash2, Edit2, ShieldAlert } from "lucide-react";
 
 const roleColors: Record<Role, string> = {
-  admin: "bg-blueprint-bg text-blueprint",
-  senior_architect: "bg-moss-bg text-moss",
-  architect: "bg-ochre-bg text-ochre",
+  ADMIN: "bg-blueprint-bg text-blueprint",
+  SENIOR_ARCHITECT: "bg-moss-bg text-moss",
+  ARCHITECT: "bg-ochre-bg text-ochre",
 };
 
 export default function StaffPage() {
   const { staff, projects, addStaff, updateStaff, removeStaff } = useStore();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", role: "architect" as Role, department: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", role: "ARCHITECT" as Role, department: "", password: "" });
 
-  function resetForm() { setForm({ name: "", email: "", phone: "", role: "architect", department: "" }); }
+  function resetForm() { setForm({ name: "", email: "", phone: "", role: "ARCHITECT", department: "", password: "" }); }
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    addStaff(form);
+    const { password, ...rest } = form;
+    addStaff({ ...rest, password: password || undefined });
     setCreateOpen(false); resetForm();
   }
 
   function openEdit(id: string) {
     const s = staff.find(m => m.id === id)!;
-    setForm({ name: s.name, email: s.email, phone: s.phone, role: s.role, department: s.department });
+    setForm({ name: s.name, email: s.email, phone: s.phone ?? "", role: s.role, department: s.department ?? "", password: "" });
     setEditTarget(id);
   }
 
@@ -37,8 +41,21 @@ export default function StaffPage() {
     e.preventDefault();
     if (!editTarget) return;
     const initials = form.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-    updateStaff(editTarget, { ...form, initials });
+    const { password, ...rest } = form;
+    updateStaff(editTarget, { ...rest, initials, ...(password ? { password } : {}) });
     setEditTarget(null); resetForm();
+  }
+
+  if (!isAdmin) {
+    return (
+      <AppShell>
+        <Card className="p-8 text-center max-w-md mx-auto mt-16">
+          <ShieldAlert size={28} className="mx-auto text-brick mb-3" />
+          <div className="text-ink font-medium text-[14px] mb-1">Admins only</div>
+          <p className="text-muted text-[12.5px]">Staff management is restricted to administrators. Contact your admin if you need a change made.</p>
+        </Card>
+      </AppShell>
+    );
   }
 
   return (
@@ -69,7 +86,7 @@ export default function StaffPage() {
                   </div>
                   <div className="flex gap-1.5">
                     <button onClick={() => openEdit(member.id)} className="p-1.5 text-muted hover:text-blueprint transition-colors"><Edit2 size={14} /></button>
-                    {member.role !== "admin" && (
+                    {member.role !== "ADMIN" && (
                       <button onClick={() => removeStaff(member.id)} className="p-1.5 text-muted hover:text-brick transition-colors"><Trash2 size={14} /></button>
                     )}
                   </div>
@@ -109,13 +126,15 @@ export default function StaffPage() {
             <FormRow>
               <Field label="Role" required>
                 <Select required value={form.role} onChange={e => setForm(f=>({...f,role:e.target.value as Role}))}>
-                  <option value="architect">Architect</option>
-                  <option value="senior_architect">Senior Architect</option>
-                  <option value="admin">Admin</option>
+                  <option value="ARCHITECT">Architect</option>
+                  <option value="SENIOR_ARCHITECT">Senior Architect</option>
+                  <option value="ADMIN">Admin</option>
                 </Select>
               </Field>
               <Field label="Department"><Input value={form.department} onChange={e => setForm(f=>({...f,department:e.target.value}))} placeholder="e.g. Design" /></Field>
             </FormRow>
+            <Field label="Temporary password"><Input type="text" value={form.password} onChange={e => setForm(f=>({...f,password:e.target.value}))} placeholder="Leave blank to use default temp password" /></Field>
+            <p className="text-[11px] text-muted -mt-2">This becomes their login password (with their email as username). Share it with them securely — they should change it after first login.</p>
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => { setCreateOpen(false); resetForm(); }} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Add member</button>
@@ -134,13 +153,14 @@ export default function StaffPage() {
             <FormRow>
               <Field label="Role">
                 <Select value={form.role} onChange={e => setForm(f=>({...f,role:e.target.value as Role}))}>
-                  <option value="architect">Architect</option>
-                  <option value="senior_architect">Senior Architect</option>
-                  <option value="admin">Admin</option>
+                  <option value="ARCHITECT">Architect</option>
+                  <option value="SENIOR_ARCHITECT">Senior Architect</option>
+                  <option value="ADMIN">Admin</option>
                 </Select>
               </Field>
               <Field label="Department"><Input value={form.department} onChange={e => setForm(f=>({...f,department:e.target.value}))} /></Field>
             </FormRow>
+            <Field label="Reset password"><Input type="text" value={form.password} onChange={e => setForm(f=>({...f,password:e.target.value}))} placeholder="Leave blank to keep current password" /></Field>
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => { setEditTarget(null); resetForm(); }} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Save changes</button>

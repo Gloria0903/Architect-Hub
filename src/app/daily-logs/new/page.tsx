@@ -1,34 +1,57 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { Select, Textarea, Field } from "@/components/ui/form-field";
-import { useStore } from "@/store/app-store";
-import { CheckCircle } from "lucide-react";
+import { useStore, formatFileSize } from "@/store/app-store";
+import { CheckCircle, X, FileText } from "lucide-react";
 
 export default function NewDailyLogPage() {
   const router = useRouter();
-  const { projects, staff, addLog } = useStore();
+  const { projects, addLog, uploadDocument } = useStore();
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const [progress, setProgress] = useState(50);
   const [form, setForm] = useState({ projectId: "", workCompleted: "", challenges: "", pendingWork: "", nextActions: "" });
+  const [files, setFiles] = useState<File[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function handleSubmit(e: React.FormEvent) {
+  function addFiles(list: FileList | null) {
+    if (!list) return;
+    setFiles(f => [...f, ...Array.from(list)]);
+  }
+
+  function removeFile(idx: number) {
+    setFiles(f => f.filter((_, i) => i !== idx));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const project = projects.find(p => p.id === form.projectId);
-    addLog({
-      projectId: form.projectId,
-      authorId: "s1",
-      date: new Date().toISOString().split("T")[0],
-      workCompleted: form.workCompleted,
-      challenges: form.challenges,
-      pendingWork: form.pendingWork,
-      nextActions: form.nextActions,
-      progress,
-    });
-    setSubmitted(true);
-    setTimeout(() => router.push("/daily-logs"), 1800);
+    setError("");
+    setSubmitting(true);
+    try {
+      await addLog({
+        projectId: form.projectId,
+        workCompleted: form.workCompleted,
+        challenges: form.challenges,
+        pendingWork: form.pendingWork,
+        nextActions: form.nextActions,
+        progress,
+      });
+      // Attach any selected files to the project's documents.
+      for (const file of files) {
+        await uploadDocument(form.projectId, file);
+      }
+      setSubmitted(true);
+      setTimeout(() => router.push("/daily-logs"), 1800);
+    } catch (err) {
+      setError((err as Error).message || "Failed to submit log");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (submitted) {
@@ -78,13 +101,47 @@ export default function NewDailyLogPage() {
                 <div className="h-full bg-blueprint rounded-full transition-all" style={{width:`${progress}%`}} />
               </div>
             </div>
-            <div className="border border-dashed border-line rounded-md p-5 text-center text-[12px] text-muted hover:border-blueprint/50 transition-colors cursor-pointer">
-              <div className="font-medium text-ink mb-0.5">Attach files (optional)</div>
-              Drag and drop drawings, photos, or documents — or click to browse.
+
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={e => { addFiles(e.target.files); e.target.value = ""; }}
+              />
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={e => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
+                className={`border border-dashed rounded-md p-5 text-center text-[12px] transition-colors cursor-pointer ${dragging ? "border-blueprint bg-blueprint-bg text-blueprint" : "border-line text-muted hover:border-blueprint/50"}`}
+              >
+                <div className="font-medium text-ink mb-0.5">Attach files (optional)</div>
+                Drag and drop drawings, photos, or documents — or click to browse.
+              </div>
+              {files.length > 0 && (
+                <div className="mt-2 flex flex-col gap-1.5">
+                  {files.map((file, i) => (
+                    <div key={i} className="flex items-center justify-between bg-vellum rounded-md px-3 py-1.5 text-[11.5px]">
+                      <span className="flex items-center gap-2 text-ink truncate"><FileText size={13} className="text-muted shrink-0" />{file.name}</span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="text-muted font-mono">{formatFileSize(file.size)}</span>
+                        <button type="button" onClick={() => removeFile(i)} className="text-muted hover:text-brick"><X size={13} /></button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
+            {error && <p className="text-brick text-[12px]">{error}</p>}
+
             <div className="flex justify-end gap-2 pt-1 border-t border-line">
               <button type="button" onClick={() => router.back()} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
-              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium hover:bg-ink/90">Submit log</button>
+              <button type="submit" disabled={submitting} className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium hover:bg-ink/90 disabled:opacity-60">
+                {submitting ? "Submitting…" : "Submit log"}
+              </button>
             </div>
           </form>
         </Card>

@@ -1,13 +1,14 @@
 "use client";
-import { use, useState } from "react";
-import { notFound } from "next/navigation";
+import { use, useState, useRef } from "react";
+import { notFound, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Modal } from "@/components/ui/modal";
-import { Select, Textarea, Field } from "@/components/ui/form-field";
-import { useStore, formatKsh } from "@/store/app-store";
-import { Repeat, Upload, FileText, MessageSquare, Wallet, History, CheckCircle, Clock } from "lucide-react";
+import { Input, Select, Textarea, Field, FormRow } from "@/components/ui/form-field";
+import { useStore, formatKsh, formatFileSize, commentTypeLabel, priorityLabel, ProjectStatus, Priority } from "@/store/app-store";
+import { Repeat, Upload, FileText, MessageSquare, Wallet, History, CheckCircle, Pencil, Trash2, Download, File as FileIcon } from "lucide-react";
 
 const tabs = [
   { key: "overview", label: "Overview", icon: FileText },
@@ -20,10 +21,21 @@ type TabKey = (typeof tabs)[number]["key"];
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { projects, staff, clients, logs, comments, payments, addPayment, reassignProject, resolveComment } = useStore();
+  const router = useRouter();
+  const { data: session } = useSession();
+  const {
+    projects, staff, clients, logs, comments, payments, documents,
+    addPayment, reassignProject, resolveComment, updateProject, removeProject,
+    uploadDocument, removeDocument,
+  } = useStore();
 
-  const project = projects.find(p => p.id === id);
-  if (!project) notFound();
+  const projectData = projects.find(p => p.id === id);
+  if (!projectData) notFound();
+  const project = projectData;
+
+  const role = session?.user?.role;
+  const isAdmin = role === "ADMIN";
+  const canManage = isAdmin || (role === "SENIOR_ARCHITECT" && project.supervisorId === session?.user?.id);
 
   const [tab, setTab] = useState<TabKey>("overview");
   const [reassignOpen, setReassignOpen] = useState(false);
@@ -31,14 +43,24 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [reassignReason, setReassignReason] = useState("");
   const [payForm, setPayForm] = useState({ amount: "", date: "", reference: "", note: "" });
   const [payOpen, setPayOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: project.name, description: project.description ?? "", status: project.status as ProjectStatus,
+    progress: project.progress, priority: project.priority as Priority, dueDate: project.dueDate,
+  });
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const client = clients.find(c => c.id === project.clientId);
   const architect = staff.find(s => s.id === project.architectId);
   const supervisor = staff.find(s => s.id === project.supervisorId);
-  const architects = staff.filter(s => s.role === "architect" || s.role === "senior_architect");
+  const architects = staff.filter(s => s.role === "ARCHITECT" || s.role === "SENIOR_ARCHITECT");
   const projectLogs = logs.filter(l => l.projectId === project.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const projectComments = comments.filter(c => c.projectId === project.id);
   const projectPayments = payments.filter(p => p.projectId === project.id);
+  const projectDocuments = documents.filter(d => d.projectId === project.id);
 
   function handleReassign() {
     if (!reassignTo) return;
@@ -48,11 +70,44 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   function handlePayment(e: React.FormEvent) {
     e.preventDefault();
-    addPayment({ projectId: project.id, amount: Number(payForm.amount), date: payForm.date, reference: payForm.reference, note: payForm.note, recordedBy: "Lewa Mutiso" });
+    addPayment({ projectId: project.id, amount: Number(payForm.amount), date: payForm.date, reference: payForm.reference, note: payForm.note });
     setPayOpen(false); setPayForm({ amount: "", date: "", reference: "", note: "" });
   }
 
+  function handleEdit(e: React.FormEvent) {
+    e.preventDefault();
+    updateProject(project.id, editForm);
+    setEditOpen(false);
+  }
+
+  async function handleDeleteProject() {
+    if (!confirm(`Delete project "${project.name}"? This removes all its logs, documents, comments and payments too.`)) return;
+    await removeProject(project.id);
+    router.push("/projects");
+  }
+
+  async function handleFiles(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    setUploadError("");
+    setUploading(true);
+    try {
+      for (const file of Array.from(list)) {
+        await uploadDocument(project.id, file);
+      }
+    } catch (e) {
+      setUploadError((e as Error).message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDeleteDoc(docId: string, name: string) {
+    if (!confirm(`Delete "${name}"?`)) return;
+    await removeDocument(docId);
+  }
+
   const outstanding = project.invoiced - project.paid;
+  const statusColor = project.status === "ON_TRACK" ? "#2F7A5E" : project.status === "AT_RISK" ? "#B07F1F" : "#B5502E";
 
   return (
     <AppShell>
@@ -66,9 +121,21 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
             <StatusPill status={project.status} className="px-2.5 py-1" />
-            <button onClick={() => setReassignOpen(true)} className="flex items-center gap-1.5 bg-brick text-white rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-brick/90">
-              <Repeat size={14} />Reassign
-            </button>
+            {canManage && (
+              <>
+                <button onClick={() => setEditOpen(true)} className="flex items-center gap-1.5 border border-line text-ink rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-vellum">
+                  <Pencil size={14} />Edit
+                </button>
+                <button onClick={() => setReassignOpen(true)} className="flex items-center gap-1.5 bg-brick text-white rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-brick/90">
+                  <Repeat size={14} />Reassign
+                </button>
+              </>
+            )}
+            {isAdmin && (
+              <button onClick={handleDeleteProject} className="flex items-center gap-1.5 border border-line text-brick rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-brick-bg">
+                <Trash2 size={14} />Delete
+              </button>
+            )}
           </div>
         </div>
 
@@ -79,15 +146,15 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             <div><div className="text-muted mb-1">Supervisor</div><div className="text-ink font-medium">{supervisor?.name ?? "—"}</div></div>
             <div><div className="text-muted mb-1">Start date</div><div className="text-ink font-mono">{project.startDate}</div></div>
             <div><div className="text-muted mb-1">Due date</div><div className="text-ink font-mono">{project.dueDate}</div></div>
-            <div><div className="text-muted mb-1">Priority</div><div className={`font-medium capitalize ${project.priority === "high" ? "text-brick" : project.priority === "medium" ? "text-ochre" : "text-muted"}`}>{project.priority}</div></div>
+            <div><div className="text-muted mb-1">Priority</div><div className={`font-medium ${project.priority === "HIGH" ? "text-brick" : project.priority === "MEDIUM" ? "text-ochre" : "text-muted"}`}>{priorityLabel(project.priority)}</div></div>
           </div>
           <div className="mt-4 pt-3 border-t border-line">
             <div className="flex items-center justify-between mb-1.5">
               <div className="text-muted text-[12px]">Overall progress</div>
-              <div className="font-mono text-[12px]" style={{color: project.status === "on_track" ? "#2F7A5E" : project.status === "at_risk" ? "#B07F1F" : "#B5502E"}}>{project.progress}%</div>
+              <div className="font-mono text-[12px]" style={{color: statusColor}}>{project.progress}%</div>
             </div>
             <div className="w-full h-2 bg-line rounded-full overflow-hidden">
-              <div className="h-full rounded-full transition-all" style={{ width: `${project.progress}%`, background: project.status === "on_track" ? "#2F7A5E" : project.status === "at_risk" ? "#B07F1F" : "#B5502E" }} />
+              <div className="h-full rounded-full transition-all" style={{ width: `${project.progress}%`, background: statusColor }} />
             </div>
           </div>
         </Card>
@@ -100,6 +167,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <button key={t.key} onClick={() => setTab(t.key)} className={`flex items-center gap-1.5 px-3.5 py-2.5 text-[12.5px] border-b-2 -mb-px whitespace-nowrap transition-colors ${tab === t.key ? "border-blueprint text-ink font-medium" : "border-transparent text-muted hover:text-ink"}`}>
                 <Icon size={14} />{t.label}
                 {t.key === "logs" && projectLogs.length > 0 && <span className="ml-1 bg-blueprint-bg text-blueprint text-[10px] rounded-full px-1.5 font-medium">{projectLogs.length}</span>}
+                {t.key === "documents" && projectDocuments.length > 0 && <span className="ml-1 bg-blueprint-bg text-blueprint text-[10px] rounded-full px-1.5 font-medium">{projectDocuments.length}</span>}
                 {t.key === "comms" && projectComments.filter(c=>!c.resolvedAt).length > 0 && <span className="ml-1 bg-brick-bg text-brick text-[10px] rounded-full px-1.5 font-medium">{projectComments.filter(c=>!c.resolvedAt).length}</span>}
               </button>
             );
@@ -112,19 +180,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             <Card className="p-4">
               <div className="font-medium text-ink text-[13px] mb-2">Project description</div>
               <p className="text-[12.5px] text-muted leading-relaxed">{project.description}</p>
-              {project.assignmentHistory.length > 0 && (
+              {(project.assignmentHistory?.length ?? 0) > 0 && (
                 <div className="mt-4 pt-4 border-t border-line">
                   <div className="font-medium text-ink text-[12px] mb-2">Reassignment history</div>
-                  {project.assignmentHistory.map(r => {
-                    const from = staff.find(s=>s.id===r.fromArchitectId);
-                    const to = staff.find(s=>s.id===r.toArchitectId);
-                    return (
-                      <div key={r.id} className="text-[11.5px] mb-2">
-                        <span className="text-muted">{r.date}</span> · Reassigned from <span className="text-ink">{from?.name ?? "Unassigned"}</span> to <span className="text-ink">{to?.name}</span>
-                        {r.reason && <div className="text-muted mt-0.5 italic">{r.reason}</div>}
-                      </div>
-                    );
-                  })}
+                  {(project.assignmentHistory ?? []).map(r => (
+                    <div key={r.id} className="text-[11.5px] mb-2">
+                      <span className="text-muted">{r.date}</span> · Reassigned from <span className="text-ink">{r.fromArchitect?.name ?? "Unassigned"}</span> to <span className="text-ink">{r.toArchitect?.name}</span>
+                      {r.performedBy && <span className="text-muted"> (by {r.performedBy.name})</span>}
+                      {r.reason && <div className="text-muted mt-0.5 italic">{r.reason}</div>}
+                    </div>
+                  ))}
                 </div>
               )}
             </Card>
@@ -178,13 +243,44 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
         {/* Documents */}
         {tab === "documents" && (
-          <Card className="p-8 text-center">
-            <Upload size={24} className="mx-auto text-muted mb-3" />
-            <div className="text-ink font-medium text-[13px]">Drag and drop drawings or documents</div>
-            <p className="text-muted text-[12px] mt-1">Supports DWG, DXF, Revit, PDF, images, BOQs, contracts and reports.</p>
-            <p className="text-muted text-[11.5px] mt-1">Version control and revision history available in Phase D.</p>
-            <button className="mt-3 bg-ink text-white rounded-md px-4 py-2 text-[12px] font-medium">Browse files</button>
-          </Card>
+          <div className="flex flex-col gap-3">
+            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => { handleFiles(e.target.files); e.target.value = ""; }} />
+            <Card
+              className={`p-8 text-center cursor-pointer transition-colors ${dragging ? "border-blueprint bg-blueprint-bg" : ""}`}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
+            >
+              <Upload size={24} className="mx-auto text-muted mb-3" />
+              <div className="text-ink font-medium text-[13px]">{uploading ? "Uploading…" : dragging ? "Drop files here" : "Drag and drop drawings or documents"}</div>
+              <p className="text-muted text-[12px] mt-1">Supports DWG, DXF, Revit, PDF, images, BOQs, contracts and reports (up to 50MB).</p>
+              <button type="button" onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }} className="mt-3 bg-ink text-white rounded-md px-4 py-2 text-[12px] font-medium">Browse files</button>
+            </Card>
+            {uploadError && <p className="text-brick text-[12px]">{uploadError}</p>}
+
+            {projectDocuments.length === 0 ? (
+              <Card className="p-6 text-center text-muted text-[12.5px]">No documents uploaded for this project yet.</Card>
+            ) : (
+              <Card className="divide-y divide-line overflow-hidden">
+                {projectDocuments.map(d => (
+                  <div key={d.id} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <FileIcon size={16} className="text-muted shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-ink font-medium text-[12.5px] truncate">{d.name}</div>
+                        <div className="text-muted text-[11px] font-mono">{formatFileSize(d.fileSize)} · {new Date(d.uploadedAt).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <a href={d.fileUrl} download={d.name} className="text-blueprint hover:text-blueprint/70" title="Download"><Download size={15} /></a>
+                      <button onClick={() => handleDeleteDoc(d.id, d.name)} className="text-muted hover:text-brick" title="Delete"><Trash2 size={15} /></button>
+                    </div>
+                  </div>
+                ))}
+              </Card>
+            )}
+          </div>
         )}
 
         {/* Client comms */}
@@ -197,7 +293,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-ink font-medium text-[13px]">{c.author}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-[3px] font-medium ${c.type === "change_request" ? "bg-brick-bg text-brick" : c.type === "approval" ? "bg-moss-bg text-moss" : c.type === "query" ? "bg-blueprint-bg text-blueprint" : "bg-ochre-bg text-ochre"}`}>{c.type.replace("_"," ")}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-[3px] font-medium ${c.type === "CHANGE_REQUEST" ? "bg-brick-bg text-brick" : c.type === "APPROVAL" ? "bg-moss-bg text-moss" : c.type === "QUERY" ? "bg-blueprint-bg text-blueprint" : "bg-ochre-bg text-ochre"}`}>{commentTypeLabel(c.type)}</span>
                     </div>
                     <p className="text-[12.5px] text-ink leading-relaxed">{c.content}</p>
                     <div className="text-[11px] text-muted mt-2 font-mono">
@@ -240,7 +336,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   <div key={pay.id} className="px-4 py-3 border-t border-line flex items-center justify-between">
                     <div>
                       <div className="text-ink text-[12.5px] font-medium">{pay.note}</div>
-                      <div className="text-muted text-[11.5px] font-mono mt-0.5">{pay.reference} · {pay.date}</div>
+                      <div className="text-muted text-[11.5px] font-mono mt-0.5">{pay.reference} · {pay.date}{pay.recordedBy && ` · recorded by ${pay.recordedBy.name}`}</div>
                     </div>
                     <div className="font-mono text-moss font-medium">{formatKsh(pay.amount)}</div>
                   </div>
@@ -271,6 +367,37 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <button onClick={handleReassign} disabled={!reassignTo} className="px-4 py-2 rounded-md text-[12.5px] bg-brick text-white font-medium disabled:opacity-50">Confirm</button>
             </div>
           </div>
+        </Modal>
+
+        {/* Edit Project Modal */}
+        <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit project" maxWidth="max-w-xl">
+          <form onSubmit={handleEdit} className="flex flex-col gap-3.5">
+            <Field label="Project name" required><Input required value={editForm.name} onChange={e => setEditForm(f=>({...f,name:e.target.value}))} /></Field>
+            <Field label="Description"><Textarea rows={3} value={editForm.description} onChange={e => setEditForm(f=>({...f,description:e.target.value}))} /></Field>
+            <FormRow>
+              <Field label="Status">
+                <Select value={editForm.status} onChange={e => setEditForm(f=>({...f,status:e.target.value as ProjectStatus}))}>
+                  <option value="ON_TRACK">On track</option>
+                  <option value="AT_RISK">At risk</option>
+                  <option value="DELAYED">Delayed</option>
+                  <option value="COMPLETED">Completed</option>
+                </Select>
+              </Field>
+              <Field label="Priority">
+                <Select value={editForm.priority} onChange={e => setEditForm(f=>({...f,priority:e.target.value as Priority}))}>
+                  <option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option>
+                </Select>
+              </Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Progress (%)"><Input type="number" min={0} max={100} value={editForm.progress} onChange={e => setEditForm(f=>({...f,progress:Number(e.target.value)}))} /></Field>
+              <Field label="Due date"><Input type="date" value={editForm.dueDate} onChange={e => setEditForm(f=>({...f,dueDate:e.target.value}))} /></Field>
+            </FormRow>
+            <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
+              <button type="button" onClick={() => setEditOpen(false)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Save changes</button>
+            </div>
+          </form>
         </Modal>
 
         {/* Payment Modal */}

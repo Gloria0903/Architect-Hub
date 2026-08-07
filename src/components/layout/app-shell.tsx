@@ -1,5 +1,6 @@
 "use client";
 import { Sidebar } from "@/components/layout/sidebar";
+import { ProfileMenu } from "@/components/layout/profile-menu";
 import { useStore } from "@/store/app-store";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -9,6 +10,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-vellum">
       <Sidebar />
       <main className="flex-1 p-6 lg:p-7 overflow-x-hidden">
+        <div className="flex justify-end mb-3">
+          <ProfileMenu />
+        </div>
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="flex flex-col items-center gap-3">

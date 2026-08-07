@@ -2,10 +2,10 @@ import { cn } from "@/lib/utils";
 import { ProjectStatus, statusLabel } from "@/store/app-store";
 
 const styles: Record<ProjectStatus, string> = {
-  on_track: "bg-moss-bg text-moss",
-  at_risk: "bg-ochre-bg text-ochre",
-  delayed: "bg-brick-bg text-brick",
-  completed: "bg-blueprint-bg text-blueprint",
+  ON_TRACK: "bg-moss-bg text-moss",
+  AT_RISK: "bg-ochre-bg text-ochre",
+  DELAYED: "bg-brick-bg text-brick",
+  COMPLETED: "bg-blueprint-bg text-blueprint",
 };
 
 export function StatusPill({ status, className }: { status: ProjectStatus; className?: string }) {

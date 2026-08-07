@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { z } from "zod";
 
 const Schema = z.object({
@@ -27,6 +28,10 @@ export async function GET(req: NextRequest) {
       ...(projectId && { projectId }),
       ...(authorId && { authorId }),
       ...(dateFrom && { date: { gte: new Date(dateFrom) } }),
+      // Non-admins only see logs for projects they are the architect or supervisor on.
+      ...(!isAdmin(session) && {
+        project: { OR: [{ architectId: session.user.id }, { supervisorId: session.user.id }] },
+      }),
     },
     include: {
       author: { select: { id: true, name: true, initials: true } },
@@ -55,7 +60,7 @@ export async function POST(req: NextRequest) {
     where: {
       projectId_authorId_date: {
         projectId: parsed.data.projectId,
-        authorId: session.user.id!,
+        authorId: session.user.id,
         date: logDate,
       },
     },
@@ -69,7 +74,7 @@ export async function POST(req: NextRequest) {
     prisma.dailyLog.create({
       data: {
         projectId: parsed.data.projectId,
-        authorId: session.user.id!,
+        authorId: session.user.id,
         date: logDate,
         workCompleted: parsed.data.workCompleted,
         challenges: parsed.data.challenges,

@@ -9,17 +9,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.role = (user as { role: string }).role;
-        token.initials = (user as { initials: string }).initials;
+        token.id = user.id as string;
+        token.role = user.role;
+        token.initials = user.initials;
       }
       return token;
     },
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id as string;
-        (session.user as { role: string }).role = token.role as string;
-        (session.user as { initials: string }).initials = token.initials as string;
+        session.user.role = token.role as "ADMIN" | "SENIOR_ARCHITECT" | "ARCHITECT";
+        session.user.initials = token.initials as string;
       }
       return session;
     },

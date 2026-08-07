@@ -26,7 +26,6 @@ export default function FinancePage() {
       date: form.date,
       reference: form.reference,
       note: form.note,
-      recordedBy: "Lewa Mutiso",
     });
     setOpen(false);
     setForm({ projectId: "", amount: "", date: "", reference: "", note: "" });

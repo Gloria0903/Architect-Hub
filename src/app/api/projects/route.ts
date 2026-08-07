@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { Priority, ProjectStatus } from "@prisma/client";
+import { Priority } from "@prisma/client";
 import { z } from "zod";
+import { projectAccessWhere, canCreateProjects } from "@/lib/rbac";
 
 const CreateProjectSchema = z.object({
   name: z.string().min(2),
@@ -22,6 +23,7 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const projects = await prisma.project.findMany({
+    where: projectAccessWhere(session),
     include: {
       client: true,
       architect: { select: { id: true, name: true, initials: true, email: true } },
@@ -38,8 +40,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const role = (session.user as { role: string }).role;
-  if (role !== "ADMIN" && role !== "SENIOR_ARCHITECT") {
+  if (!canCreateProjects(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
   // Notify admin
   await prisma.notification.create({
     data: {
-      userId: session.user.id!,
+      userId: session.user.id,
       message: `Project "${project.name}" (${sheetNo}) created successfully`,
       type: "SUCCESS",
     },

@@ -13,7 +13,7 @@ export default function DailyLogsPage() {
   const [filterAuthor, setFilterAuthor] = useState("all");
 
   const today = new Date().toISOString().split("T")[0];
-  const architects = staff.filter(s => s.role !== "admin");
+  const architects = staff.filter(s => s.role !== "ADMIN");
   const submittedToday = logs.filter(l => l.date === today).map(l => l.authorId);
   const missingToday = architects.filter(a => !submittedToday.includes(a.id));
 

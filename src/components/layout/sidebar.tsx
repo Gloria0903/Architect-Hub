@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { LayoutGrid, Folder, ClipboardList, Files, Wallet, MessageCircle, History, Users, Settings, Repeat, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/store/app-store";
@@ -39,6 +40,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export function Sidebar() {
   const { notifications, comments, logs } = useStore();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
   const unreadNotifs = notifications.filter(n => !n.read).length;
   const unresolvedComments = comments.filter(c => !c.resolvedAt).length;
   const today = new Date().toISOString().split("T")[0];
@@ -62,7 +65,7 @@ export function Sidebar() {
       <NavItem href="/client-comms" label="Client comms" icon={MessageCircle} badge={unresolvedComments} />
       <NavItem href="/activity" label="Activity timeline" icon={History} />
       <SectionLabel>TEAM</SectionLabel>
-      {team.map(i => <NavItem key={i.href} {...i} />)}
+      {team.filter(i => isAdmin || i.href !== "/staff").map(i => <NavItem key={i.href} {...i} />)}
       <Link href="/projects" className="mt-auto bg-brick/[0.18] rounded-md p-2.5 hover:bg-brick/[0.28] transition-colors">
         <div className="flex items-center gap-1.5 text-[#E8B7A2] text-[11px] font-semibold">
           <Repeat size={14} strokeWidth={1.8} />Take over project

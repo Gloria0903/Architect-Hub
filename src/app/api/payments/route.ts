@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { z } from "zod";
 
 const Schema = z.object({
@@ -19,7 +20,12 @@ export async function GET(req: NextRequest) {
   const projectId = searchParams.get("projectId");
 
   const payments = await prisma.payment.findMany({
-    where: { ...(projectId && { projectId }) },
+    where: {
+      ...(projectId && { projectId }),
+      ...(!isAdmin(session) && {
+        project: { OR: [{ architectId: session.user.id }, { supervisorId: session.user.id }] },
+      }),
+    },
     include: {
       project: { select: { id: true, name: true, sheetNo: true } },
       recordedBy: { select: { id: true, name: true } },
@@ -34,7 +40,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const role = (session.user as { role: string }).role;
+  const role = session.user.role;
   if (role !== "ADMIN" && role !== "SENIOR_ARCHITECT") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -47,7 +53,7 @@ export async function POST(req: NextRequest) {
     prisma.payment.create({
       data: {
         projectId: parsed.data.projectId,
-        recordedById: session.user.id!,
+        recordedById: session.user.id,
         amount: parsed.data.amount,
         date: new Date(parsed.data.date),
         reference: parsed.data.reference,

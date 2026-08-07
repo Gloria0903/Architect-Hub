@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { useStore } from "@/store/app-store";
 import { Upload, Wallet, Repeat, ClipboardList, MessageCircle, Users, Folder } from "lucide-react";
+import { commentTypeLabel } from "@/store/app-store";
 
 type EventType = "upload" | "payment" | "takeover" | "log" | "comment" | "assignment" | "project";
 
@@ -27,7 +28,7 @@ const bgMap: Record<EventType, string> = {
 };
 
 export default function ActivityPage() {
-  const { logs, payments, projects, staff, comments } = useStore();
+  const { logs, payments, projects, staff, comments, documents } = useStore();
 
   // Build a unified timeline from all data
   const events: { id: string; type: EventType; actor: string; description: string; timestamp: string; projectName?: string }[] = [
@@ -38,16 +39,20 @@ export default function ActivityPage() {
     }),
     ...payments.map(p => {
       const project = projects.find(pr => pr.id === p.projectId);
-      return { id: p.id, type: "payment" as EventType, actor: p.recordedBy, description: `Payment recorded — KSh ${p.amount.toLocaleString()}`, timestamp: p.date + "T12:00:00", projectName: project?.name };
+      return { id: p.id, type: "payment" as EventType, actor: p.recordedBy?.name ?? "Unknown", description: `Payment recorded — KSh ${p.amount.toLocaleString()}`, timestamp: p.date + "T12:00:00", projectName: project?.name };
     }),
     ...comments.map(c => {
       const project = projects.find(p => p.id === c.projectId);
-      return { id: c.id, type: "comment" as EventType, actor: c.author, description: `${c.type.replace("_"," ")} logged`, timestamp: c.createdAt, projectName: project?.name };
+      return { id: c.id, type: "comment" as EventType, actor: c.author, description: `${commentTypeLabel(c.type)} logged`, timestamp: c.createdAt, projectName: project?.name };
     }),
-    ...projects.filter(p => p.assignmentHistory.length > 0).flatMap(p =>
-      p.assignmentHistory.map(r => {
+    ...(documents ?? []).map(d => {
+      const project = projects.find(p => p.id === d.projectId);
+      return { id: d.id, type: "upload" as EventType, actor: staff.find(s => s.id === d.uploadedById)?.name ?? "Unknown", description: `Uploaded document — ${d.name}`, timestamp: d.uploadedAt, projectName: project?.name };
+    }),
+    ...projects.filter(p => (p.assignmentHistory?.length ?? 0) > 0).flatMap(p =>
+      (p.assignmentHistory ?? []).map(r => {
         const to = staff.find(s => s.id === r.toArchitectId);
-        return { id: r.id, type: "takeover" as EventType, actor: r.performedBy, description: `Project reassigned to ${to?.name ?? "unknown"}`, timestamp: r.date + "T09:00:00", projectName: p.name };
+        return { id: r.id, type: "takeover" as EventType, actor: r.performedBy?.name ?? "Unknown", description: `Project reassigned to ${to?.name ?? "unknown"}`, timestamp: r.date + "T09:00:00", projectName: p.name };
       })
     ),
   ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());

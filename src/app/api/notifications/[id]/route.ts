@@ -8,7 +8,7 @@ export async function PATCH(_: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id } = await params;
   const notification = await prisma.notification.update({
-    where: { id, userId: session.user.id! },
+    where: { id, userId: session.user.id },
     data: { read: true },
   });
 

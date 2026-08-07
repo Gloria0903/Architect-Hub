@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { projectAccessWhere } from "@/lib/rbac";
 
 export async function GET() {
   const session = await auth();
@@ -18,6 +19,7 @@ export async function GET() {
     staff,
   ] = await Promise.all([
     prisma.project.findMany({
+      where: projectAccessWhere(session),
       include: {
         client: { select: { id: true, name: true } },
         architect: { select: { id: true, name: true, initials: true } },
@@ -50,7 +52,7 @@ export async function GET() {
       take: 10,
     }),
     prisma.notification.findMany({
-      where: { userId: session.user.id! },
+      where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
       take: 8,
     }),
@@ -61,17 +63,17 @@ export async function GET() {
   ]);
 
   // Financial aggregates
-  const totalRevenue = projects.reduce((s, p) => s + p.paid, 0);
-  const totalOutstanding = projects.reduce((s, p) => s + (p.invoiced - p.paid), 0);
+  const totalRevenue = projects.reduce((s: number, p: { paid: number }) => s + p.paid, 0);
+  const totalOutstanding = projects.reduce((s: number, p: { invoiced: number; paid: number }) => s + (p.invoiced - p.paid), 0);
 
   // Project health
-  const onTrack = projects.filter((p) => p.status === "ON_TRACK").length;
-  const atRisk = projects.filter((p) => p.status === "AT_RISK").length;
-  const delayed = projects.filter((p) => p.status === "DELAYED").length;
+  const onTrack = projects.filter((p: { status: string }) => p.status === "ON_TRACK").length;
+  const atRisk = projects.filter((p: { status: string }) => p.status === "AT_RISK").length;
+  const delayed = projects.filter((p: { status: string }) => p.status === "DELAYED").length;
 
   // Who hasn't submitted today
-  const submittedIds = new Set(todayLogs.map((l) => l.authorId));
-  const missingStaff = staff.filter((s) => !submittedIds.has(s.id));
+  const submittedIds = new Set(todayLogs.map((l: { authorId: string }) => l.authorId));
+  const missingStaff = staff.filter((s: { id: string }) => !submittedIds.has(s.id));
 
   return NextResponse.json({
     projects,

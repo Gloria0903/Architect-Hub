@@ -4,14 +4,14 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Select, Textarea, Field } from "@/components/ui/form-field";
-import { useStore } from "@/store/app-store";
+import { useStore, commentTypeLabel, CommentType } from "@/store/app-store";
 import { CheckCircle, MessageCircle, Filter } from "lucide-react";
 
-const typeColors: Record<string, string> = {
-  change_request: "bg-brick-bg text-brick",
-  approval: "bg-moss-bg text-moss",
-  query: "bg-blueprint-bg text-blueprint",
-  feedback: "bg-ochre-bg text-ochre",
+const typeColors: Record<CommentType, string> = {
+  CHANGE_REQUEST: "bg-brick-bg text-brick",
+  APPROVAL: "bg-moss-bg text-moss",
+  QUERY: "bg-blueprint-bg text-blueprint",
+  FEEDBACK: "bg-ochre-bg text-ochre",
 };
 
 export default function ClientCommsPage() {
@@ -20,7 +20,7 @@ export default function ClientCommsPage() {
   const [filterType, setFilterType] = useState("all");
   const [replyOpen, setReplyOpen] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState({ projectId: "", clientId: "", author: "", content: "", type: "feedback" as "feedback"|"approval"|"change_request"|"query" });
+  const [form, setForm] = useState({ projectId: "", clientId: "", author: "", content: "", type: "FEEDBACK" as CommentType });
 
   const visible = comments
     .filter(c => filterProject === "all" || c.projectId === filterProject)
@@ -32,7 +32,7 @@ export default function ClientCommsPage() {
     const client = clients.find(c => c.id === form.clientId);
     addComment({ ...form, author: form.author || client?.contactPerson || "Client" });
     setAddOpen(false);
-    setForm({ projectId: "", clientId: "", author: "", content: "", type: "feedback" });
+    setForm({ projectId: "", clientId: "", author: "", content: "", type: "FEEDBACK" });
   }
 
   return (
@@ -57,10 +57,10 @@ export default function ClientCommsPage() {
           </select>
           <select value={filterType} onChange={e => setFilterType(e.target.value)} className="border border-line rounded-md px-2.5 py-1.5 text-[12px] bg-surface outline-none">
             <option value="all">All types</option>
-            <option value="change_request">Change requests</option>
-            <option value="approval">Approvals</option>
-            <option value="query">Queries</option>
-            <option value="feedback">Feedback</option>
+            <option value="CHANGE_REQUEST">Change requests</option>
+            <option value="APPROVAL">Approvals</option>
+            <option value="QUERY">Queries</option>
+            <option value="FEEDBACK">Feedback</option>
           </select>
           <label className="flex items-center gap-1.5 text-[12px] text-muted cursor-pointer ml-auto">
             <input type="checkbox" onChange={e => setFilterType(e.target.checked ? "__unresolved__" : "all")} className="accent-blueprint" />
@@ -88,7 +88,7 @@ export default function ClientCommsPage() {
                       <span className="text-ink text-[11.5px] font-mono">{project?.sheetNo}</span>
                       <span className="text-muted text-[11.5px]">— {project?.name}</span>
                       <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-[3px] font-medium ${typeColors[comment.type]}`}>
-                        {comment.type.replace("_", " ")}
+                        {commentTypeLabel(comment.type)}
                       </span>
                     </div>
                     <p className="text-[12.5px] text-ink leading-relaxed">{comment.content}</p>
@@ -121,10 +121,10 @@ export default function ClientCommsPage() {
             </Field>
             <Field label="Comment type" required>
               <Select required value={form.type} onChange={e => setForm(f=>({...f,type:e.target.value as typeof form.type}))}>
-                <option value="feedback">Feedback</option>
-                <option value="change_request">Change request</option>
-                <option value="approval">Approval</option>
-                <option value="query">Query</option>
+                <option value="FEEDBACK">Feedback</option>
+                <option value="CHANGE_REQUEST">Change request</option>
+                <option value="APPROVAL">Approval</option>
+                <option value="QUERY">Query</option>
               </Select>
             </Field>
             <Field label="Client / author name">

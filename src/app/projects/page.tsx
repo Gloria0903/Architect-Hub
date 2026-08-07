@@ -1,42 +1,58 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Modal } from "@/components/ui/modal";
 import { Input, Select, Textarea, Field, FormRow } from "@/components/ui/form-field";
 import { useStore, formatKsh, ProjectStatus, Priority } from "@/store/app-store";
-import { Plus, Repeat, Eye } from "lucide-react";
+import { Plus, Repeat, Eye, Trash2 } from "lucide-react";
 
 type Filter = ProjectStatus | "all";
 
 export default function ProjectsPage() {
-  const { projects, staff, clients, addProject, reassignProject } = useStore();
+  const { projects, staff, clients, addProject, reassignProject, removeProject } = useStore();
+  const { data: session } = useSession();
+  const role = session?.user?.role;
+  const isAdmin = role === "ADMIN";
+  const canCreate = role === "ADMIN" || role === "SENIOR_ARCHITECT";
+
   const [filter, setFilter] = useState<Filter>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [reassignTarget, setReassignTarget] = useState<string | null>(null);
   const [reassignTo, setReassignTo] = useState("");
   const [reassignReason, setReassignReason] = useState("");
+  const [createError, setCreateError] = useState("");
 
-  const architects = staff.filter(s => s.role === "architect" || s.role === "senior_architect");
-  const supervisors = staff.filter(s => s.role === "senior_architect" || s.role === "admin");
+  // Architects/senior architects who can be assigned to a project.
+  const architects = staff.filter(s => s.role === "ARCHITECT" || s.role === "SENIOR_ARCHITECT");
+  const supervisors = staff.filter(s => s.role === "SENIOR_ARCHITECT" || s.role === "ADMIN");
   const visible = filter === "all" ? projects : projects.filter(p => p.status === filter);
 
-  const [form, setForm] = useState({ name: "", clientId: "", location: "", description: "", architectId: "", supervisorId: "", startDate: "", dueDate: "", budget: "", priority: "medium" as Priority });
+  function projectCount(staffId: string) {
+    return projects.filter(p => p.architectId === staffId).length;
+  }
 
-  function handleCreate(e: React.FormEvent) {
+  const [form, setForm] = useState({ name: "", clientId: "", location: "", description: "", architectId: "", supervisorId: "", startDate: "", dueDate: "", budget: "", priority: "MEDIUM" as Priority });
+
+  async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    addProject({
-      name: form.name, clientId: form.clientId, location: form.location,
-      description: form.description, architectId: form.architectId,
-      supervisorId: form.supervisorId, startDate: form.startDate,
-      dueDate: form.dueDate, budget: Number(form.budget),
-      invoiced: 0, paid: 0, priority: form.priority,
-      status: "on_track", progress: 0,
-    });
-    setCreateOpen(false);
-    setForm({ name: "", clientId: "", location: "", description: "", architectId: "", supervisorId: "", startDate: "", dueDate: "", budget: "", priority: "medium" });
+    setCreateError("");
+    try {
+      await addProject({
+        name: form.name, clientId: form.clientId, location: form.location,
+        description: form.description, architectId: form.architectId || undefined,
+        supervisorId: form.supervisorId || undefined, startDate: form.startDate,
+        dueDate: form.dueDate, budget: Number(form.budget),
+        priority: form.priority,
+      });
+      setCreateOpen(false);
+      setForm({ name: "", clientId: "", location: "", description: "", architectId: "", supervisorId: "", startDate: "", dueDate: "", budget: "", priority: "MEDIUM" });
+    } catch (err) {
+      setCreateError((err as Error).message || "Failed to create project");
+    }
   }
 
   function handleReassign() {
@@ -45,12 +61,17 @@ export default function ProjectsPage() {
     setReassignTarget(null); setReassignTo(""); setReassignReason("");
   }
 
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Delete project "${name}"? This removes all its logs, documents, comments and payments too.`)) return;
+    await removeProject(id);
+  }
+
   const filters: { label: string; value: Filter }[] = [
     { label: "All", value: "all" },
-    { label: "On track", value: "on_track" },
-    { label: "At risk", value: "at_risk" },
-    { label: "Delayed", value: "delayed" },
-    { label: "Completed", value: "completed" },
+    { label: "On track", value: "ON_TRACK" },
+    { label: "At risk", value: "AT_RISK" },
+    { label: "Delayed", value: "DELAYED" },
+    { label: "Completed", value: "COMPLETED" },
   ];
 
   return (
@@ -59,11 +80,13 @@ export default function ProjectsPage() {
         <div className="flex items-center justify-between mb-5">
           <div>
             <h1 className="font-display font-bold text-[20px] text-ink">Projects</h1>
-            <p className="text-muted text-[12px] mt-0.5">{projects.length} projects — click a project to view full details</p>
+            <p className="text-muted text-[12px] mt-0.5">{projects.length} {isAdmin ? "projects" : "projects assigned to you"} — click a project to view full details</p>
           </div>
-          <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90">
-            <Plus size={15} />New project
-          </button>
+          {canCreate && (
+            <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90">
+              <Plus size={15} />New project
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 mb-4 flex-wrap">
@@ -94,6 +117,7 @@ export default function ProjectsPage() {
               {visible.map(p => {
                 const arch = staff.find(s => s.id === p.architectId);
                 const client = clients.find(c => c.id === p.clientId);
+                const canManageThis = isAdmin || (role === "SENIOR_ARCHITECT" && p.supervisorId === session?.user?.id);
                 return (
                   <tr key={p.id} className="border-t border-line hover:bg-vellum/40 transition-colors">
                     <td className="px-4 py-3 font-mono text-[11px] text-muted">{p.sheetNo}</td>
@@ -111,7 +135,7 @@ export default function ProjectsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div className="w-20 h-1.5 bg-line rounded-full overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${p.progress}%`, background: p.status === "on_track" ? "#2F7A5E" : p.status === "at_risk" ? "#B07F1F" : "#B5502E" }} />
+                          <div className="h-full rounded-full" style={{ width: `${p.progress}%`, background: p.status === "ON_TRACK" ? "#2F7A5E" : p.status === "AT_RISK" ? "#B07F1F" : "#B5502E" }} />
                         </div>
                         <span className="font-mono text-[11px] text-muted">{p.progress}%</span>
                       </div>
@@ -120,7 +144,12 @@ export default function ProjectsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Link href={`/projects/${p.id}`} className="p-1 text-muted hover:text-blueprint transition-colors" title="View"><Eye size={14} /></Link>
-                        <button onClick={() => setReassignTarget(p.id)} className="p-1 text-muted hover:text-brick transition-colors" title="Reassign"><Repeat size={14} /></button>
+                        {canManageThis && (
+                          <button onClick={() => setReassignTarget(p.id)} className="p-1 text-muted hover:text-brick transition-colors" title="Reassign"><Repeat size={14} /></button>
+                        )}
+                        {isAdmin && (
+                          <button onClick={() => handleDelete(p.id, p.name)} className="p-1 text-muted hover:text-brick transition-colors" title="Delete"><Trash2 size={14} /></button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -149,13 +178,13 @@ export default function ProjectsPage() {
               <Field label="Assign architect">
                 <Select value={form.architectId} onChange={e => setForm(f=>({...f,architectId:e.target.value}))}>
                   <option value="">Select architect</option>
-                  {architects.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  {architects.map(a => <option key={a.id} value={a.id}>{a.name} ({roleShort(a.role)})</option>)}
                 </Select>
               </Field>
               <Field label="Assign supervisor">
                 <Select value={form.supervisorId} onChange={e => setForm(f=>({...f,supervisorId:e.target.value}))}>
                   <option value="">Select supervisor</option>
-                  {supervisors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  {supervisors.map(a => <option key={a.id} value={a.id}>{a.name} ({roleShort(a.role)})</option>)}
                 </Select>
               </Field>
             </FormRow>
@@ -167,10 +196,11 @@ export default function ProjectsPage() {
               <Field label="Budget (KSh)" required><Input type="number" required value={form.budget} onChange={e => setForm(f=>({...f,budget:e.target.value}))} placeholder="e.g. 18500000" /></Field>
               <Field label="Priority">
                 <Select value={form.priority} onChange={e => setForm(f=>({...f,priority:e.target.value as Priority}))}>
-                  <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                  <option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option>
                 </Select>
               </Field>
             </FormRow>
+            {createError && <p className="text-brick text-[12px]">{createError}</p>}
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => setCreateOpen(false)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Create project</button>
@@ -194,7 +224,7 @@ export default function ProjectsPage() {
                 <Field label="Reassign to" required>
                   <Select value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
                     <option value="">Select architect</option>
-                    {architects.filter(a => a.id !== p.architectId).map(a => <option key={a.id} value={a.id}>{a.name} ({a.activeProjects} active projects)</option>)}
+                    {architects.filter(a => a.id !== p.architectId).map(a => <option key={a.id} value={a.id}>{a.name} ({projectCount(a.id)} active projects)</option>)}
                   </Select>
                 </Field>
                 <Field label="Reason for reassignment">
@@ -211,4 +241,8 @@ export default function ProjectsPage() {
       </div>
     </AppShell>
   );
+}
+
+function roleShort(r: string) {
+  return r === "SENIOR_ARCHITECT" ? "Senior" : r === "ADMIN" ? "Admin" : "Architect";
 }

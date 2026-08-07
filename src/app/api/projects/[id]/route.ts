@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { canAccessProject, isAdmin } from "@/lib/rbac";
+import { z } from "zod";
+
+const UpdateSchema = z.object({
+  name: z.string().min(2).optional(),
+  description: z.string().optional(),
+  status: z.enum(["ON_TRACK", "AT_RISK", "DELAYED", "COMPLETED"]).optional(),
+  progress: z.number().min(0).max(100).optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  location: z.string().min(2).optional(),
+  startDate: z.string().optional(),
+  dueDate: z.string().optional(),
+  budget: z.number().min(0).optional(),
+  invoiced: z.number().min(0).optional(),
+});
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -38,6 +53,9 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   });
 
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!canAccessProject(session, project)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   return NextResponse.json(project);
 }
 
@@ -46,23 +64,40 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  const existing = await prisma.project.findUnique({ where: { id } });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!canAccessProject(session, existing)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const body = await req.json();
+  const parsed = UpdateSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  const data = parsed.data;
+
+  // Only admins / senior architects may edit budget & invoiced figures.
+  if ((data.budget !== undefined || data.invoiced !== undefined) && session.user.role === "ARCHITECT") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const project = await prisma.project.update({
     where: { id },
     data: {
-      ...(body.name && { name: body.name }),
-      ...(body.description !== undefined && { description: body.description }),
-      ...(body.status && { status: body.status }),
-      ...(body.progress !== undefined && { progress: body.progress }),
-      ...(body.priority && { priority: body.priority }),
-      ...(body.dueDate && { dueDate: new Date(body.dueDate) }),
-      ...(body.budget !== undefined && { budget: body.budget }),
-      ...(body.invoiced !== undefined && { invoiced: body.invoiced }),
+      ...(data.name && { name: data.name }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.status && { status: data.status }),
+      ...(data.progress !== undefined && { progress: data.progress }),
+      ...(data.priority && { priority: data.priority }),
+      ...(data.location && { location: data.location }),
+      ...(data.startDate && { startDate: new Date(data.startDate) }),
+      ...(data.dueDate && { dueDate: new Date(data.dueDate) }),
+      ...(data.budget !== undefined && { budget: data.budget }),
+      ...(data.invoiced !== undefined && { invoiced: data.invoiced }),
     },
     include: {
       client: true,
       architect: { select: { id: true, name: true, initials: true } },
+      supervisor: { select: { id: true, name: true, initials: true } },
     },
   });
 
@@ -73,8 +108,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const role = (session.user as { role: string }).role;
-  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!isAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
   await prisma.project.delete({ where: { id } });

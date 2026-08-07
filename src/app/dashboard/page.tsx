@@ -3,17 +3,20 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
-import { useStore, formatKsh } from "@/store/app-store";
+import { useStore, formatKsh, commentTypeLabel } from "@/store/app-store";
+import { useSession } from "next-auth/react";
 import { Upload, Wallet, Repeat, ClipboardList, AlertTriangle, CheckCircle, Bell } from "lucide-react";
 
 export default function DashboardPage() {
-  const { projects, staff, logs, comments, notifications, payments, markNotificationRead } = useStore();
+  const { projects, staff, logs, comments, notifications, markNotificationRead } = useStore();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
   const today = new Date().toISOString().split("T")[0];
   const todayLogs = logs.filter(l => l.date === today);
   const unread = notifications.filter(n => !n.read);
-  const delayed = projects.filter(p => p.status === "delayed");
-  const atRisk = projects.filter(p => p.status === "at_risk");
-  const onTrack = projects.filter(p => p.status === "on_track");
+  const delayed = projects.filter(p => p.status === "DELAYED");
+  const atRisk = projects.filter(p => p.status === "AT_RISK");
+  const onTrack = projects.filter(p => p.status === "ON_TRACK");
   const totalOutstanding = projects.reduce((s, p) => s + (p.invoiced - p.paid), 0);
   const totalRevenue = projects.reduce((s, p) => s + p.paid, 0);
   const unresolved = comments.filter(c => !c.resolvedAt);
@@ -28,17 +31,10 @@ export default function DashboardPage() {
       <div>
         <div className="flex items-start justify-between mb-5">
           <div>
-            <h1 className="font-display font-bold text-[20px] text-ink">Admin Dashboard</h1>
+            <h1 className="font-display font-bold text-[20px] text-ink">{isAdmin ? "Admin Dashboard" : "My Dashboard"}</h1>
             <p className="text-muted text-[12px] mt-0.5">
-              {new Date().toLocaleDateString("en-KE", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} — {projects.length} active projects across {staff.filter(s => s.role !== "admin").length} staff
+              {new Date().toLocaleDateString("en-KE", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} — {projects.length} {isAdmin ? "active projects across " + staff.filter(s => s.role !== "ADMIN").length + " staff" : "projects assigned to you"}
             </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Bell size={18} className="text-muted" />
-              {unread.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-brick rounded-full text-white text-[9px] flex items-center justify-center font-bold">{unread.length}</span>}
-            </div>
-            <div className="w-8 h-8 rounded-full bg-blueprint-bg text-blueprint flex items-center justify-center font-semibold text-[12px]">LM</div>
           </div>
         </div>
 
@@ -57,7 +53,7 @@ export default function DashboardPage() {
           <Card className="p-3.5">
             <div className="text-muted text-[11px]">Logs today</div>
             <div className="font-display font-bold text-[28px] text-ink mt-0.5">{todayLogs.length}</div>
-            <div className="text-brick text-[11px] mt-1">{staff.filter(s=>s.role!=="admin").length - todayLogs.length} missing submissions</div>
+            <div className="text-brick text-[11px] mt-1">{staff.filter(s=>s.role!=="ADMIN").length - todayLogs.length} missing submissions</div>
           </Card>
           <Card className="p-3.5">
             <div className="text-muted text-[11px]">Unresolved client comments</div>
@@ -150,10 +146,10 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-2">
               {notifications.slice(0, 6).map(n => (
                 <div key={n.id} className={`flex gap-2.5 p-2.5 rounded-md cursor-pointer transition-colors ${n.read ? "bg-transparent" : "bg-vellum"}`} onClick={() => markNotificationRead(n.id)}>
-                  {n.type === "error" && <AlertTriangle size={14} className="text-brick mt-0.5 shrink-0" />}
-                  {n.type === "warning" && <AlertTriangle size={14} className="text-ochre mt-0.5 shrink-0" />}
-                  {n.type === "success" && <CheckCircle size={14} className="text-moss mt-0.5 shrink-0" />}
-                  {n.type === "info" && <Bell size={14} className="text-blueprint mt-0.5 shrink-0" />}
+                  {n.type === "ERROR" && <AlertTriangle size={14} className="text-brick mt-0.5 shrink-0" />}
+                  {n.type === "WARNING" && <AlertTriangle size={14} className="text-ochre mt-0.5 shrink-0" />}
+                  {n.type === "SUCCESS" && <CheckCircle size={14} className="text-moss mt-0.5 shrink-0" />}
+                  {n.type === "INFO" && <Bell size={14} className="text-blueprint mt-0.5 shrink-0" />}
                   <div>
                     <p className={`text-[11.5px] leading-snug ${n.read ? "text-muted" : "text-ink"}`}>{n.message}</p>
                     {!n.read && <span className="text-[10px] text-blueprint">Click to mark read</span>}
@@ -201,8 +197,8 @@ export default function DashboardPage() {
                 <div key={c.id} className="border-t border-line pt-2.5 mt-2.5 first:border-0 first:mt-0 first:pt-0">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-ink text-[12px] font-medium">{c.author}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${c.type === "change_request" ? "bg-brick-bg text-brick" : c.type === "approval" ? "bg-moss-bg text-moss" : "bg-blueprint-bg text-blueprint"}`}>
-                      {c.type.replace("_", " ")}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${c.type === "CHANGE_REQUEST" ? "bg-brick-bg text-brick" : c.type === "APPROVAL" ? "bg-moss-bg text-moss" : "bg-blueprint-bg text-blueprint"}`}>
+                      {commentTypeLabel(c.type)}
                     </span>
                   </div>
                   <p className="text-[11px] text-muted">{project?.name}</p>
