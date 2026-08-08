@@ -22,17 +22,23 @@ interface DocumentUploaderProps {
 interface QueuedFile {
   file: File;
   progress: number; // 0-100
-  status: "pending" | "uploading" | "confirming" | "done" | "error";
+  status: "pending" | "uploading" | "done" | "error";
   error?: string;
 }
 
 const ACCEPT_ATTR = Object.keys(ALLOWED_DOCUMENT_TYPES).join(",");
 
 /**
- * Uploads directly to S3 via a presigned URL (XHR, not fetch, so we get
- * upload progress events), then confirms with our API to create the
- * Document row. Two-phase by design: if the S3 PUT fails, no DB row is
- * ever created, so the document list never shows a "ghost" upload.
+ * Uploads via a single multipart POST straight to /api/documents (new) or
+ * /api/documents/:id/versions (new version) — one request, not a
+ * presign-then-confirm dance. This is deliberate: those routes do
+ * server-side magic-byte sniffing on the real file bytes
+ * (sniffDangerousSignature in document-validation.ts), which only works
+ * because the bytes pass through our server. A direct-to-storage
+ * presigned upload would skip that check entirely.
+ *
+ * XHR (not fetch) is used only so we get upload progress events — fetch
+ * still can't report upload progress for a request body.
  */
 export function DocumentUploader({ target, onComplete, onError }: DocumentUploaderProps) {
   const [queue, setQueue] = useState<QueuedFile[]>([]);
@@ -41,6 +47,8 @@ export function DocumentUploader({ target, onComplete, onError }: DocumentUpload
 
   const uploadOne = useCallback(
     async (file: File) => {
+      // Fast client-side feedback only — the server repeats this check
+      // (and the magic-byte sniff) against the real bytes regardless.
       const validation = validateDocumentUpload({
         fileName: file.name,
         mimeType: file.type,
@@ -57,27 +65,17 @@ export function DocumentUploader({ target, onComplete, onError }: DocumentUpload
       }
 
       try {
-        const presignUrl =
-          target.mode === "new"
-            ? `/api/projects/${target.projectId}/documents/presign`
-            : `/api/documents/${target.documentId}/versions/presign`;
-
-        const presignRes = await fetch(presignUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fileName: file.name,
-            contentType: file.type || "application/octet-stream",
-            sizeBytes: file.size,
-          }),
-        });
-
-        if (!presignRes.ok) {
-          const { error } = await presignRes.json().catch(() => ({ error: "Upload failed" }));
-          throw new Error(error || "Could not start upload");
+        const formData = new FormData();
+        formData.append("file", file);
+        if (target.mode === "new") {
+          formData.append("projectId", target.projectId);
+          formData.append("category", target.category);
         }
 
-        const { uploadUrl, key } = await presignRes.json();
+        const url =
+          target.mode === "new"
+            ? "/api/documents"
+            : `/api/documents/${target.documentId}/versions`;
 
         setQueue((q) =>
           q.map((item) => (item.file === file ? { ...item, status: "uploading" } : item))
@@ -85,46 +83,29 @@ export function DocumentUploader({ target, onComplete, onError }: DocumentUpload
 
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
-          xhr.open("PUT", uploadUrl);
-          xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+          xhr.open("POST", url);
           xhr.upload.onprogress = (e) => {
             if (!e.lengthComputable) return;
             const progress = Math.round((e.loaded / e.total) * 100);
             setQueue((q) => q.map((item) => (item.file === file ? { ...item, progress } : item)));
           };
           xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) resolve();
-            else reject(new Error(`Upload to storage failed (${xhr.status})`));
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+              return;
+            }
+            let message = "Upload failed";
+            try {
+              const body = JSON.parse(xhr.responseText);
+              if (body?.error) message = body.error;
+            } catch {
+              // response wasn't JSON — fall back to the generic message
+            }
+            reject(new Error(message));
           };
           xhr.onerror = () => reject(new Error("Network error during upload"));
-          xhr.send(file);
+          xhr.send(formData);
         });
-
-        setQueue((q) =>
-          q.map((item) => (item.file === file ? { ...item, status: "confirming" } : item))
-        );
-
-        const confirmUrl =
-          target.mode === "new"
-            ? `/api/projects/${target.projectId}/documents`
-            : `/api/documents/${target.documentId}/versions`;
-
-        const confirmRes = await fetch(confirmUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            key,
-            name: file.name,
-            mimeType: file.type || "application/octet-stream",
-            fileSize: file.size,
-            ...(target.mode === "new" ? { category: target.category } : {}),
-          }),
-        });
-
-        if (!confirmRes.ok) {
-          const { error } = await confirmRes.json().catch(() => ({ error: "Could not save document" }));
-          throw new Error(error || "Could not save document");
-        }
 
         setQueue((q) =>
           q.map((item) => (item.file === file ? { ...item, status: "done", progress: 100 } : item))
@@ -206,7 +187,7 @@ export function DocumentUploader({ target, onComplete, onError }: DocumentUpload
                   <Progress value={item.progress} className="h-1.5 mt-1" />
                 )}
               </div>
-              {(item.status === "uploading" || item.status === "confirming") && (
+              {item.status === "uploading" && (
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               )}
               {item.status === "error" && (
