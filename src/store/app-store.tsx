@@ -243,16 +243,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       setState(s => ({ ...s, loading: true, error: null }));
-      const [staff, clients, projects, logs, comments, payments, notifications, documents] = await Promise.all([
-        apiFetch<StaffMember[]>("/api/staff"),
-        apiFetch<Client[]>("/api/clients"),
-        apiFetch<Project[]>("/api/projects"),
-        apiFetch<DailyLog[]>("/api/logs"),
-        apiFetch<ClientComment[]>("/api/comments"),
-        apiFetch<Payment[]>("/api/payments"),
-        apiFetch<Notification[]>("/api/notifications"),
-        apiFetch<Document[]>("/api/documents"),
-      ]);
+      const [staff, clients, projects, logs, comments, payments, notificationResponse, documents] =
+  await Promise.all([
+    apiFetch<StaffMember[]>("/api/staff"),
+    apiFetch<Client[]>("/api/clients"),
+    apiFetch<Project[]>("/api/projects"),
+    apiFetch<DailyLog[]>("/api/logs"),
+    apiFetch<ClientComment[]>("/api/comments"),
+    apiFetch<Payment[]>("/api/payments"),
+    apiFetch<{ notifications: Notification[]; unreadCount: number }>("/api/notifications"),
+    apiFetch<Document[]>("/api/documents"),
+  ]);
+
+const notifications = notificationResponse.notifications ?? [];
       setState({ staff, clients, projects, logs, comments, payments, notifications, documents, loading: false, error: null });
     } catch (e) {
       setState(s => ({ ...s, loading: false, error: (e as Error).message }));

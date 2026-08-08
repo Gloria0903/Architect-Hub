@@ -1,29 +1,25 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+// GET /api/notifications?unreadOnly=true&limit=20
+export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  const notifications = await prisma.notification.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
+  const unreadOnly = req.nextUrl.searchParams.get("unreadOnly") === "true";
+  const limit = Math.min(Number(req.nextUrl.searchParams.get("limit")) || 20, 100);
 
-  return NextResponse.json(notifications);
-}
+  const [notifications, unreadCount] = await Promise.all([
+    prisma.notification.findMany({
+      where: { userId: session.user.id, ...(unreadOnly ? { read: false } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+    prisma.notification.count({ where: { userId: session.user.id, read: false } }),
+  ]);
 
-export async function PATCH() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  // Mark all as read
-  await prisma.notification.updateMany({
-    where: { userId: session.user.id, read: false },
-    data: { read: true },
-  });
-
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ notifications, unreadCount });
 }

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { CommentType } from "@prisma/client";
 import { isAdmin } from "@/lib/rbac";
+import { notifyClientComment } from "@/lib/notifications";
 import { z } from "zod";
 
 const Schema = z.object({
@@ -56,10 +57,25 @@ export async function POST(req: NextRequest) {
       type: parsed.data.type as CommentType,
     },
     include: {
-      project: { select: { id: true, name: true, sheetNo: true } },
+      project: { select: { id: true, name: true, sheetNo: true, architectId: true, supervisorId: true } },
       client: { select: { id: true, name: true } },
     },
   });
+
+  const notifyRecipients = [comment.project.architectId, comment.project.supervisorId].filter(
+    (uid): uid is string => Boolean(uid)
+  );
+  await Promise.all(
+    [...new Set(notifyRecipients)].map((userId) =>
+      notifyClientComment({
+        userId,
+        projectId: comment.project.id,
+        projectName: `${comment.project.name} (${comment.project.sheetNo})`,
+        commentPreview: comment.content,
+        commentType: comment.type,
+      })
+    )
+  );
 
   return NextResponse.json(comment, { status: 201 });
 }

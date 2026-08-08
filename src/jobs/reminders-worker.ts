@@ -14,22 +14,16 @@ export const remindersQueue = new Queue(REMINDERS_QUEUE_NAME, { connection: redi
  * safe — it won't create duplicate schedules.
  */
 export async function scheduleReminderJobs() {
-  await remindersQueue.add(
-    "check-deadlines" satisfies ReminderJobName,
-    {},
-    {
-      repeat: { pattern: "0 8 * * *" }, // 08:00 server time, every day
-      jobId: "check-deadlines-daily",
-    }
+  await remindersQueue.upsertJobScheduler(
+    "check-deadlines-daily",
+    { pattern: "0 8 * * *" }, // 08:00 server time, every day
+    { name: "check-deadlines" satisfies ReminderJobName }
   );
 
-  await remindersQueue.add(
-    "check-missing-reports" satisfies ReminderJobName,
-    {},
-    {
-      repeat: { pattern: "0 17 * * 1-5" }, // 17:00, Monday–Friday
-      jobId: "check-missing-reports-weekdays",
-    }
+  await remindersQueue.upsertJobScheduler(
+    "check-missing-reports-weekdays",
+    { pattern: "0 17 * * 1-5" }, // 17:00, Monday–Friday
+    { name: "check-missing-reports" satisfies ReminderJobName }
   );
 }
 

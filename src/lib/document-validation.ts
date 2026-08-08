@@ -31,6 +31,34 @@ export interface DocumentValidationResult {
   error?: string;
 }
 
+/**
+ * Declared MIME type and file extension are both attacker-controlled — a
+ * raw multipart request can claim "application/pdf" for any bytes at all.
+ * This checks the actual file signature (magic bytes) against a deny-list
+ * of executable/script formats, independent of whatever was declared.
+ * This is what actually would have stopped the .exe that made it into
+ * uploads/ before this module existed.
+ */
+const DANGEROUS_SIGNATURES: { bytes: number[]; label: string; zipLike?: boolean }[] = [
+  { bytes: [0x4d, 0x5a], label: "Windows executable (.exe/.dll)" }, // "MZ"
+  { bytes: [0x7f, 0x45, 0x4c, 0x46], label: "Linux executable (ELF)" },
+  { bytes: [0xca, 0xfe, 0xba, 0xbe], label: "Mach-O / Java class executable" },
+  { bytes: [0x23, 0x21], label: "Script with shebang (#!)" }, // "#!"
+  { bytes: [0x50, 0x4b, 0x03, 0x04], label: "ZIP-based archive", zipLike: true },
+];
+
+export function sniffDangerousSignature(buffer: Buffer): { dangerous: boolean; label?: string } {
+  for (const sig of DANGEROUS_SIGNATURES) {
+    if (sig.bytes.every((b, i) => buffer[i] === b)) {
+      // ZIP signature overlaps with legitimate .docx/.xlsx/.pptx (which are
+      // just ZIPs internally) — skip it here, since the declared-type check
+      // in validateDocumentUpload() already handles Office formats safely.
+      if (sig.zipLike) continue;
+      return { dangerous: true, label: sig.label };
+    }
+  }
+  return { dangerous: false };
+}
 export function validateDocumentUpload(params: {
   fileName: string;
   mimeType: string;

@@ -22,3 +22,9 @@ out/
 # OS
 .DS_Store
 Thumbs.db
+
+# Uploaded files — never belong in git. Local-disk storage is a dev-only
+# fallback; production should be using S3 (see src/lib/s3.ts) once
+# AWS_S3_BUCKET is configured.
+/uploads/
+tsconfig.tsbuildinfo

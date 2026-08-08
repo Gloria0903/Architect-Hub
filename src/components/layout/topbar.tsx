@@ -1,4 +1,5 @@
-import { Bell, Search } from "lucide-react";
+import { Search } from "lucide-react";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 export function Topbar({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
@@ -11,10 +12,7 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
         <div className="hidden md:flex items-center gap-2 bg-surface border border-line rounded-md px-3 py-1.5 text-[12px] text-muted w-56">
           <Search size={14} /><span>Search projects, clients…</span>
         </div>
-        <div className="relative">
-          <Bell size={18} className="text-muted" strokeWidth={1.8} />
-          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-brick rounded-full" />
-        </div>
+        <NotificationBell />
         <div className="w-[30px] h-[30px] rounded-full bg-blueprint-bg text-blueprint flex items-center justify-center font-semibold text-[12px]">LM</div>
       </div>
     </div>

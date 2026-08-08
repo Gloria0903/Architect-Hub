@@ -6,7 +6,7 @@
  *   npx tsx src/worker.ts          (dev)
  *   node dist/worker.js            (prod, after build)
  *
- * See NOTIFICATIONS_INTEGRATION.md for the Docker/PM2 setup.
+ * See docs/NOTIFICATIONS_INTEGRATION.md for the Docker/PM2 setup.
  */
 import { startEmailWorker } from "@/workers/email-worker";
 import { scheduleReminderJobs, startReminderWorker } from "@/jobs/reminders-worker";

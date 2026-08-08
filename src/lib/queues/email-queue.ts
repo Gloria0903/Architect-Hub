@@ -1,5 +1,5 @@
 import { Queue } from "bullmq";
-import { redis } from "@/lib/redis";
+import { redis, redisConfigured } from "@/lib/redis";
 
 export const EMAIL_QUEUE_NAME = "email";
 
@@ -75,6 +75,8 @@ export const emailQueue = new Queue<EmailJobPayload>(EMAIL_QUEUE_NAME, {
 });
 
 export async function enqueueEmail(payload: EmailJobPayload) {
+  if (!redisConfigured) return; // No REDIS_URL set — email delivery is disabled until it is.
+
   // Never let a queueing failure break the request that triggered it
   // (e.g. creating a project shouldn't 500 because Redis hiccuped).
   try {

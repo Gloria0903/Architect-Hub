@@ -10,11 +10,11 @@ async function ensureDir() {
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
 }
 
-export async function saveUploadedFile(file: File): Promise<{ fileKey: string; fileSize: number }> {
+export async function saveUploadedFile(file: File, preReadBuffer?: Buffer): Promise<{ fileKey: string; fileSize: number }> {
   await ensureDir();
   const ext = path.extname(file.name);
   const fileKey = `${randomUUID()}${ext}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const buffer = preReadBuffer ?? Buffer.from(await file.arrayBuffer());
   await fs.writeFile(path.join(UPLOAD_DIR, fileKey), buffer);
   return { fileKey, fileSize: buffer.length };
 }

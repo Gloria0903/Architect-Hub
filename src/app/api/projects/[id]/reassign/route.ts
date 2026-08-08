@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { canReassignProjects } from "@/lib/rbac";
+import { notifyProjectAssignment } from "@/lib/notifications";
 import { z } from "zod";
 
 const Schema = z.object({
@@ -48,14 +49,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         performedById: session.user.id,
       },
     }),
-    prisma.notification.create({
-      data: {
-        userId: parsed.data.toArchitectId,
-        message: `You have been assigned to project: ${project.name} (${project.sheetNo})`,
-        type: "INFO",
-      },
-    }),
   ]);
+
+  await notifyProjectAssignment({
+    userId: parsed.data.toArchitectId,
+    projectId: id,
+    projectName: `${project.name} (${project.sheetNo})`,
+    assignedRole: "ARCHITECT",
+    assignedByName: session.user.name ?? "An administrator",
+  });
 
   return NextResponse.json(updated);
 }

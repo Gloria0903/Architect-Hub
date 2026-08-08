@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { canAccessProject } from "@/lib/rbac";
-import { readStoredFile, deleteStoredFile } from "@/lib/storage";
+import { readStoredFile } from "@/lib/storage";
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -40,13 +40,15 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const document = await prisma.document.findUnique({ where: { id }, include: { project: true } });
-  if (!document) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!document || document.deletedAt) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!canAccessProject(session, document.project)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await deleteStoredFile(document.fileKey);
-  await prisma.document.delete({ where: { id } });
+  // Soft delete — architectural documents should never disappear entirely.
+  // Take Over Project and audit history need to be able to reference them
+  // even after a "delete" action.
+  await prisma.document.update({ where: { id }, data: { deletedAt: new Date() } });
 
   return NextResponse.json({ success: true });
 }
