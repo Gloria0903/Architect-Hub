@@ -12,7 +12,9 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "worker": "tsx --env-file=.env src/worker.ts"
+    "worker": "tsx --env-file=.env src/worker.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1106.0",
@@ -51,6 +53,7 @@
     "tailwindcss": "^3.4.14",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.0",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.10"
   }
 }

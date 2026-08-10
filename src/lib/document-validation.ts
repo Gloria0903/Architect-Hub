@@ -9,7 +9,6 @@ export const ALLOWED_DOCUMENT_TYPES: Record<string, { label: string; maxSizeMb: 
   "image/vnd.dwg": { label: "DWG", maxSizeMb: 150 },
   "application/dxf": { label: "DXF", maxSizeMb: 150 },
   "image/vnd.dxf": { label: "DXF", maxSizeMb: 150 },
-  "application/octet-stream": { label: "CAD/Revit", maxSizeMb: 250 }, // .rvt often reports this
   "image/png": { label: "Image", maxSizeMb: 25 },
   "image/jpeg": { label: "Image", maxSizeMb: 25 },
   "image/webp": { label: "Image", maxSizeMb: 25 },
@@ -23,8 +22,13 @@ export const ALLOWED_DOCUMENT_TYPES: Record<string, { label: string; maxSizeMb: 
 
 // Extensions that legitimately report application/octet-stream and need a
 // filename-based fallback check, since Revit/CAD tools don't register
-// reliable MIME types in most browsers.
+// reliable MIME types in most browsers. Deliberately NOT a key in
+// ALLOWED_DOCUMENT_TYPES above — application/octet-stream must never be
+// accepted by declared MIME type alone, only after the extension check
+// below passes. (A prior version listed it directly in the map, which
+// silently short-circuited this extension check entirely.)
 const OCTET_STREAM_EXTENSIONS = [".rvt", ".rfa", ".dwg", ".dxf", ".skp", ".ifc"];
+const OCTET_STREAM_RULE = { label: "CAD/Revit", maxSizeMb: 250 };
 
 export interface DocumentValidationResult {
   ok: boolean;
@@ -72,7 +76,7 @@ export function validateDocumentUpload(params: {
     const hasKnownExt = OCTET_STREAM_EXTENSIONS.some((ext) =>
       fileName.toLowerCase().endsWith(ext)
     );
-    if (hasKnownExt) rule = ALLOWED_DOCUMENT_TYPES["application/octet-stream"];
+    if (hasKnownExt) rule = OCTET_STREAM_RULE;
   }
 
   if (!rule) {
