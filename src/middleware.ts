@@ -1,12 +1,87 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import type { NextAuthRequest } from "next-auth";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
+
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+// Login, password reset, and MFA endpoints get a tighter budget — these are
+// the classic brute-force / credential-stuffing targets. (Login itself also
+// has per-account lockout in src/lib/auth.ts; this is the per-IP layer on
+// top of that, so an attacker can't just spray many different accounts.)
+const AUTH_SENSITIVE_PREFIXES = [
+  "/api/auth/callback/credentials",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+  "/api/auth/mfa",
+];
+
+function isRateLimited(pathname: string, ip: string): { limited: boolean; retryAfterMs: number } {
+  const sensitive = AUTH_SENSITIVE_PREFIXES.some((p) => pathname.startsWith(p));
+  const { ok, retryAfterMs } = sensitive
+    ? rateLimit(`auth:${ip}`, 10, 5 * 60 * 1000) // 10 requests / 5 min per IP
+    : rateLimit(`api:${ip}:${pathname}`, 60, 60 * 1000); // 60 requests / min per IP+route
+  return { limited: !ok, retryAfterMs };
+}
+
+/**
+ * Reject cross-site state-changing requests. Session cookies are already
+ * SameSite, which covers most of this, but browsers vary in how strictly
+ * they enforce that — this is the standard OWASP-recommended second layer
+ * for JSON APIs: verify the request actually originated from this app,
+ * rather than issuing/checking a separate CSRF token on every form.
+ */
+function isCrossOriginMutation(req: NextAuthRequest): boolean {
+  const origin = req.headers.get("origin") || req.headers.get("referer");
+  if (!origin) return false; // no Origin/Referer at all — some proxies strip it; don't block on absence
+
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    return true; // unparseable Origin/Referer is itself suspicious
+  }
+
+  const allowedHosts = new Set(
+    [req.nextUrl.host, process.env.NEXTAUTH_URL, process.env.NEXT_PUBLIC_APP_URL]
+      .filter((v): v is string => Boolean(v))
+      .map((v) => {
+        try {
+          return new URL(v.includes("://") ? v : `https://${v}`).host;
+        } catch {
+          return v;
+        }
+      })
+  );
+
+  return !allowedHosts.has(originHost);
+}
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
+  const method = req.method;
+  const isApiRoute = pathname.startsWith("/api");
+
+  // ── CSRF: block cross-site mutations before anything else runs ──────────
+  if (isApiRoute && MUTATING_METHODS.has(method) && isCrossOriginMutation(req)) {
+    return NextResponse.json({ error: "Cross-origin request blocked" }, { status: 403 });
+  }
+
+  // ── Rate limiting: mutating API calls only — reads (including dashboard
+  // polling) are intentionally exempt so this can't throttle normal usage.
+  if (isApiRoute && MUTATING_METHODS.has(method)) {
+    const ip = getClientIp(req);
+    const { limited, retryAfterMs } = isRateLimited(pathname, ip);
+    if (limited) {
+      return NextResponse.json(
+        { error: "Too many requests. Please slow down and try again shortly." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(retryAfterMs / 1000)) } }
+      );
+    }
+  }
 
   const publicPaths = ["/login", "/forgot-password", "/reset-password", "/api/auth"];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
-  const isApiRoute = pathname.startsWith("/api");
 
   if (!req.auth && !isPublic) {
     // API routes must NEVER receive an HTML redirect response — fetch() follows
