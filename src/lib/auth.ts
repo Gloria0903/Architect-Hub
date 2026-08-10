@@ -27,6 +27,7 @@ async function logLoginEvent(userId: string | null, success: boolean, reason: st
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: process.env.AUTH_SECRET,
   session: { strategy: "jwt", maxAge: DEFAULT_SESSION_SECONDS },
   pages: { signIn: "/login" },
   callbacks: {

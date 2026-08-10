@@ -274,6 +274,27 @@ const notifications = notificationResponse.notifications ?? [];
     }));
   }
 }, [status, refresh]);
+
+  // Keep data fresh when other users change it (new logs, payments, comments, etc.)
+  // without the current user having to trigger a mutation of their own: poll
+  // periodically, and refetch immediately whenever the tab regains focus.
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 30000);
+
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [status, refresh]);
   const addStaff = useCallback(async (data: Parameters<AppActions["addStaff"]>[0]) => {
     const result = await apiFetch<{ temporaryPassword?: string }>("/api/staff", { method: "POST", body: JSON.stringify({ ...data, role: data.role.toUpperCase() }) });
     await refresh();

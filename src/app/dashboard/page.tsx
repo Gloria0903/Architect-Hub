@@ -8,11 +8,17 @@ import { useSession } from "next-auth/react";
 import { Upload, Wallet, Repeat, ClipboardList, AlertTriangle, CheckCircle, Bell } from "lucide-react";
 
 export default function DashboardPage() {
-  const { projects, staff, logs, comments, notifications, markNotificationRead } = useStore();
+  const { projects, staff, logs, comments, payments, notifications, markNotificationRead } = useStore();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
+
+  // Normalize a log/payment date (full ISO datetime from the API) down to YYYY-MM-DD
+  // so it can be compared against calendar-day strings. Comparing the raw ISO string
+  // to a date-only string (the old bug) always evaluates to false.
+  const dayKey = (iso: string) => new Date(iso).toISOString().split("T")[0];
+
   const today = new Date().toISOString().split("T")[0];
-  const todayLogs = logs.filter(l => l.date === today);
+  const todayLogs = logs.filter(l => dayKey(l.date) === today);
   const unread = notifications.filter(n => !n.read);
   const delayed = projects.filter(p => p.status === "DELAYED");
   const atRisk = projects.filter(p => p.status === "AT_RISK");
@@ -20,7 +26,46 @@ export default function DashboardPage() {
   const totalOutstanding = projects.reduce((s, p) => s + (p.invoiced - p.paid), 0);
   const totalRevenue = projects.reduce((s, p) => s + p.paid, 0);
   const unresolved = comments.filter(c => !c.resolvedAt);
-  const weeklyLogs = [5, 7, 6, 8, todayLogs.length, 0, 0];
+
+  // Real per-day log counts for the current Mon–Sun week (was a hardcoded fake array).
+  const now = new Date();
+  const mondayOffset = (now.getDay() + 6) % 7; // 0 = Monday ... 6 = Sunday
+  const startOfWeek = new Date(now);
+  startOfWeek.setHours(0, 0, 0, 0);
+  startOfWeek.setDate(now.getDate() - mondayOffset);
+  const weekDayKeys = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    return d.toISOString().split("T")[0];
+  });
+  const weeklyLogs = weekDayKeys.map(key => logs.filter(l => dayKey(l.date) === key).length);
+  const maxWeeklyLogs = Math.max(...weeklyLogs, 1);
+  const todayIndex = mondayOffset;
+
+  // Real monthly revenue for the last 6 months, from actual payment records
+  // (was a hardcoded fake SVG line + a hardcoded "+12.4%" label).
+  const monthLabel = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
+  const monthBuckets = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    return { key: monthLabel(d), total: 0 };
+  });
+  payments.forEach(p => {
+    const key = monthLabel(new Date(p.date));
+    const bucket = monthBuckets.find(b => b.key === key);
+    if (bucket) bucket.total += p.amount;
+  });
+  const maxMonthTotal = Math.max(...monthBuckets.map(b => b.total), 1);
+  const trendPoints = monthBuckets.map((b, i) => ({
+    x: 4 + i * (200 / (monthBuckets.length - 1)),
+    y: 64 - (b.total / maxMonthTotal) * 52,
+  }));
+  const trendPolyline = trendPoints.map(p => `${p.x},${p.y}`).join(" ");
+  const trendArea = `${trendPolyline} ${trendPoints[trendPoints.length - 1].x},68 ${trendPoints[0].x},68`;
+  const lastMonthTotal = monthBuckets[monthBuckets.length - 1].total;
+  const prevMonthTotal = monthBuckets[monthBuckets.length - 2]?.total ?? 0;
+  const revenueChangePct = prevMonthTotal > 0
+    ? Math.round(((lastMonthTotal - prevMonthTotal) / prevMonthTotal) * 1000) / 10
+    : (lastMonthTotal > 0 ? 100 : 0);
 
   const onTrackPct = Math.round((onTrack.length / projects.length) * 97.4);
   const atRiskPct = Math.round((atRisk.length / projects.length) * 97.4);
@@ -83,9 +128,12 @@ export default function DashboardPage() {
           <Card className="p-3.5">
             <div className="font-medium text-ink text-[12.5px] mb-2">Daily logs this week</div>
             <svg width="100%" height="70" viewBox="0 0 160 70" aria-hidden="true">
-              {weeklyLogs.map((v, i) => (
-                <rect key={i} x={6 + i * 22} y={64 - v * 8} width="14" height={v * 8} fill={i === 4 ? "#2451C4" : v === 0 ? "#E6E9EA" : "#B5D4F4"} rx="2" />
-              ))}
+              {weeklyLogs.map((v, i) => {
+                const h = v === 0 ? 2 : (v / maxWeeklyLogs) * 56;
+                return (
+                  <rect key={i} x={6 + i * 22} y={64 - h} width="14" height={h} fill={i === todayIndex ? "#2451C4" : v === 0 ? "#E6E9EA" : "#B5D4F4"} rx="2" />
+                );
+              })}
             </svg>
             <div className="flex justify-between text-[9.5px] text-muted font-mono px-1">
               {["M","T","W","T","F","S","S"].map((d,i)=><span key={i}>{d}</span>)}
@@ -94,12 +142,14 @@ export default function DashboardPage() {
           <Card className="p-3.5">
             <div className="flex justify-between items-center mb-2">
               <div className="font-medium text-ink text-[12.5px]">Revenue trend</div>
-              <div className="text-moss text-[11px]">+12.4%</div>
+              <div className={`text-[11px] ${revenueChangePct >= 0 ? "text-moss" : "text-brick"}`}>
+                {revenueChangePct >= 0 ? "+" : ""}{revenueChangePct}%
+              </div>
             </div>
             <svg width="100%" height="68" viewBox="0 0 220 68" aria-hidden="true">
-              <polyline points="4,52 44,44 84,48 124,28 164,32 204,12" fill="none" stroke="#2451C4" strokeWidth="2" />
-              <polyline points="4,52 44,44 84,48 124,28 164,32 204,12 204,68 4,68" fill="#E7EDFA" stroke="none" />
-              {[4,44,84,124,164,204].map((x,i) => <circle key={i} cx={x} cy={[52,44,48,28,32,12][i]} r="2.5" fill="#2451C4" />)}
+              <polyline points={trendPolyline} fill="none" stroke="#2451C4" strokeWidth="2" />
+              <polyline points={trendArea} fill="#E7EDFA" stroke="none" />
+              {trendPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="#2451C4" />)}
             </svg>
           </Card>
         </div>

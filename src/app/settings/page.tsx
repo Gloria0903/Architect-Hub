@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Input, Field, FormRow } from "@/components/ui/form-field";
 import { useStore, roleLabel, Role } from "@/store/app-store";
 import { CheckCircle } from "lucide-react";
+import { MfaSettingsCard } from "@/components/settings/mfa-card";
 
 export default function SettingsPage() {
   const { staff, updateStaff } = useStore();
@@ -72,6 +73,8 @@ export default function SettingsPage() {
               </div>
             </form>
           </Card>
+
+          <MfaSettingsCard />
 
           <Card className="p-4">
             <div className="font-medium text-ink text-[13px] mb-3">Notifications</div>
