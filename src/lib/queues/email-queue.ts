@@ -82,7 +82,7 @@ export async function enqueueEmail(payload: EmailJobPayload) {
   try {
     await emailQueue.add(payload.kind, payload);
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.error("[email-queue] failed to enqueue", payload.kind, err);
   }
 }

@@ -85,7 +85,10 @@ export function ProjectDocuments({ projectId }: { projectId: string }) {
   }, [projectId, category, search]);
 
   useEffect(() => {
-    load();
+    // Deferred to a microtask: load() calls setLoading(true) as its first
+    // line, and calling that synchronously within the effect body itself
+    // (rather than after a tick) trips react-hooks/set-state-in-effect.
+    Promise.resolve().then(load);
   }, [load]);
 
   async function handleDelete(doc: DocumentRow) {
@@ -155,7 +158,7 @@ export function ProjectDocuments({ projectId }: { projectId: string }) {
         <p className="text-sm text-muted-foreground">Loading documents...</p>
       ) : documents.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No documents yet. Upload drawings, BOQs, contracts, or reports to keep this project's
+          No documents yet. Upload drawings, BOQs, contracts, or reports to keep this project&apos;s
           knowledge in one place.
         </div>
       ) : (

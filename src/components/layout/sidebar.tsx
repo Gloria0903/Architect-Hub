@@ -70,7 +70,7 @@ export function Sidebar() {
         <div className="flex items-center gap-1.5 text-[#E8B7A2] text-[11px] font-semibold">
           <Repeat size={14} strokeWidth={1.8} />Take over project
         </div>
-        <div className="text-[#8B96A0] text-[10.5px] mt-0.5 leading-tight">Instantly access any project's full history.</div>
+        <div className="text-[#8B96A0] text-[10.5px] mt-0.5 leading-tight">Instantly access any project&apos;s full history.</div>
       </Link>
     </aside>
   );

@@ -44,12 +44,12 @@ export function startReminderWorker() {
   );
 
   worker.on("completed", (job, result) => {
-    // eslint-disable-next-line no-console
+     
     console.log(`[reminders] ${job.name} completed:`, result);
   });
 
   worker.on("failed", (job, err) => {
-    // eslint-disable-next-line no-console
+     
     console.error(`[reminders] ${job?.name} failed:`, err.message);
   });
 

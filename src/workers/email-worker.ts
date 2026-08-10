@@ -26,12 +26,12 @@ export function startEmailWorker() {
   );
 
   worker.on("completed", (job) => {
-    // eslint-disable-next-line no-console
+     
     console.log(`[email-worker] sent ${job.data.kind} to ${job.data.to}`);
   });
 
   worker.on("failed", (job, err) => {
-    // eslint-disable-next-line no-console
+     
     console.error(`[email-worker] failed ${job?.data.kind} to ${job?.data.to}:`, err.message);
   });
 

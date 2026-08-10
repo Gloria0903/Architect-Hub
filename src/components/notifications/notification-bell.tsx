@@ -56,7 +56,9 @@ export function NotificationBell() {
   }, []);
 
   useEffect(() => {
-    load();
+    // Deferred to a microtask — see document-list.tsx for why calling load()
+    // directly at the top of the effect trips react-hooks/set-state-in-effect.
+    Promise.resolve().then(load);
     const interval = setInterval(load, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [load]);

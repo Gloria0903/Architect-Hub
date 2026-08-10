@@ -17,7 +17,7 @@ function getResendClient(): Resend | null {
   if (!apiKey) {
     if (!warnedMissingKey) {
       warnedMissingKey = true;
-      // eslint-disable-next-line no-console
+       
       console.warn("[email] RESEND_API_KEY is not set — emails will fail to send.");
     }
     return null;

@@ -94,7 +94,10 @@ npx prisma migrate dev --name "your_change"  # Create a migration
 | Finance           | ✅ Done   | Record payments, view balances         |
 | Client comms      | ✅ Done   | Log comments, resolve, filter          |
 | Activity timeline | ✅ Done   | Unified audit feed                     |
-| Documents         | ⏳ Next   | S3 upload (Phase E)                    |
-| Email notifs      | ⏳ Next   | Resend/BullMQ (Phase E)                |
-| MFA setup UI      | ⏳ Next   | QR code enrollment (Phase E)           |
-| Deployment        | ⏳ Next   | Docker + CI/CD (Phase F)               |
+| Documents         | ✅ Done   | S3 upload, versioning, drag-and-drop   |
+| Email notifs      | ✅ Done   | Resend + BullMQ worker                 |
+| MFA setup UI      | ✅ Done   | QR code enrollment                     |
+| Deployment        | ✅ Done   | Docker + docker-compose + CI           |
+| Take Over Project | ✅ Done   | Handover dossier + reassignment flow   |
+| Rate limiting     | ✅ Done   | Per-IP, tiered by endpoint sensitivity |
+| CSRF protection   | ✅ Done   | Origin/Referer verification (middleware) |

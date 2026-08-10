@@ -8,7 +8,8 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Modal } from "@/components/ui/modal";
 import { Input, Select, Textarea, Field, FormRow } from "@/components/ui/form-field";
 import { useStore, formatKsh, formatFileSize, commentTypeLabel, priorityLabel, ProjectStatus, Priority } from "@/store/app-store";
-import { Repeat, Upload, FileText, MessageSquare, Wallet, History, CheckCircle, Pencil, Trash2, Download, File as FileIcon } from "lucide-react";
+import Link from "next/link";
+import { Repeat, Upload, FileText, MessageSquare, Wallet, History, CheckCircle, Pencil, Trash2, Download, File as FileIcon, ArrowRightLeft } from "lucide-react";
 
 const tabs = [
   { key: "overview", label: "Overview", icon: FileText },
@@ -122,6 +123,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
             <StatusPill status={project.status} className="px-2.5 py-1" />
+            {canEdit && (
+              <Link href={`/projects/${project.id}/takeover`} className="flex items-center gap-1.5 border border-blueprint text-blueprint rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-blueprint-bg">
+                <ArrowRightLeft size={14} />Take over
+              </Link>
+            )}
             {canEdit && (
               <button onClick={() => setEditOpen(true)} className="flex items-center gap-1.5 border border-line text-ink rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-vellum">
                 <Pencil size={14} />Edit
