@@ -16,11 +16,11 @@ async function main() {
   const remindersWorker = startReminderWorker();
   await scheduleReminderJobs();
 
-  // eslint-disable-next-line no-console
+   
   console.log("[worker] email worker + reminders worker started");
 
   const shutdown = async () => {
-    // eslint-disable-next-line no-console
+     
     console.log("[worker] shutting down...");
     await Promise.all([emailWorker.close(), remindersWorker.close()]);
     process.exit(0);
@@ -31,7 +31,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console
+   
   console.error("[worker] fatal startup error", err);
   process.exit(1);
 });

@@ -1,7 +1,7 @@
 import IORedis from "ioredis";
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __archubRedis: IORedis | undefined;
   var __archubRedisWarned: boolean | undefined;
 }
@@ -32,7 +32,7 @@ export const redis =
 redis.on("error", (err) => {
   if (!globalThis.__archubRedisWarned) {
     globalThis.__archubRedisWarned = true;
-    // eslint-disable-next-line no-console
+     
     console.warn(
       "[redis] Not connected — email notifications and background reminders are disabled until REDIS_URL is set.",
       err.message

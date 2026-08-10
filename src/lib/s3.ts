@@ -13,7 +13,7 @@ for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {
     // Fail loudly at import time in dev; in prod this should never happen
     // because the platform config validates env before boot.
-    // eslint-disable-next-line no-console
+     
     console.warn(`[s3] Missing required env var: ${key}`);
   }
 }

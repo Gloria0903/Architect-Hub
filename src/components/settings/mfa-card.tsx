@@ -182,7 +182,7 @@ export function MfaSettingsCard() {
             <img src={qrDataUrl} alt="MFA setup QR code" className="w-40 h-40 border border-line rounded-md" />
           )}
           <details className="text-[11.5px] text-muted">
-            <summary className="cursor-pointer">Can't scan it? Enter this code manually</summary>
+            <summary className="cursor-pointer">Can&apos;t scan it? Enter this code manually</summary>
             <code className="block mt-1.5 p-2 bg-paper rounded-md font-mono text-[11px] break-all">{secret}</code>
           </details>
           <div>
