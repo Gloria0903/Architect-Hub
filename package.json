@@ -12,7 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "worker": "tsx src/worker.ts"
+    "worker": "tsx --env-file=.env src/worker.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1106.0",

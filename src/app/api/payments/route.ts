@@ -1,3 +1,4 @@
+import { notifyPaymentUpdate } from "@/lib/notifications";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
   const parsed = Schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const [payment] = await prisma.$transaction([
+  const [payment, updatedProject] = await prisma.$transaction([
     prisma.payment.create({
       data: {
         projectId: parsed.data.projectId,
@@ -68,6 +69,23 @@ export async function POST(req: NextRequest) {
       data: { paid: { increment: parsed.data.amount } },
     }),
   ]);
+
+  const outstandingBalance = updatedProject.budget - updatedProject.paid;
+  const recipients = [updatedProject.architectId, updatedProject.supervisorId].filter(
+    (id): id is string => Boolean(id) && id !== session.user.id
+  );
+
+  await Promise.all(
+    [...new Set(recipients)].map((userId) =>
+      notifyPaymentUpdate({
+        userId,
+        projectId: updatedProject.id,
+        projectName: `${payment.project.name} (${payment.project.sheetNo})`,
+        amount: parsed.data.amount,
+        outstandingBalance,
+      })
+    )
+  );
 
   return NextResponse.json(payment, { status: 201 });
 }

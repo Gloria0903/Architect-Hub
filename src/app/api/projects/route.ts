@@ -1,3 +1,4 @@
+import { notifyProjectAssignment } from "@/lib/notifications";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Notify admin
+ // Notify admin
   await prisma.notification.create({
     data: {
       userId: session.user.id,
@@ -78,6 +79,25 @@ export async function POST(req: NextRequest) {
       type: "SUCCESS",
     },
   });
+
+  // Notify anyone assigned at creation time
+  const assignees: { userId: string; role: "ARCHITECT" | "SUPERVISOR" }[] = [];
+  if (project.architectId) assignees.push({ userId: project.architectId, role: "ARCHITECT" });
+  if (project.supervisorId) assignees.push({ userId: project.supervisorId, role: "SUPERVISOR" });
+
+  await Promise.all(
+    assignees
+      .filter((a) => a.userId !== session.user.id) // don't notify yourself
+      .map((a) =>
+        notifyProjectAssignment({
+          userId: a.userId,
+          projectId: project.id,
+          projectName: `${project.name} (${sheetNo})`,
+          assignedRole: a.role,
+          assignedByName: session.user.name ?? "A team member",
+        })
+      )
+  );
 
   return NextResponse.json(project, { status: 201 });
 }
