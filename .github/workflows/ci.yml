@@ -20,13 +20,22 @@ jobs:
           set -e
           # Diff range: PRs compare against base; pushes to main compare
           # against the previous commit.
+          ZERO_SHA="0000000000000000000000000000000000000000"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             RANGE="origin/${{ github.base_ref }}...HEAD"
+          elif [ "${{ github.event.before }}" = "$ZERO_SHA" ]; then
+            # New branch or force-pushed/rewritten history: there is no valid
+            # 'before' commit to diff against. Silently skipping here is
+            # exactly how a dangerous file previously slipped back in via a
+            # squashed history rewrite — so instead diff the full tree at
+            # HEAD against git's empty tree, which lists every file as
+            # "added" and forces a full scan.
+            RANGE="$(git hash-object -t tree /dev/null) ${{ github.sha }}"
           else
             RANGE="${{ github.event.before }} ${{ github.sha }}"
           fi
 
-          CHANGED=$(git diff --name-only --diff-filter=ACM $RANGE -- . || true)
+          CHANGED=$(git diff --name-only --diff-filter=ACM $RANGE --)
           FAILED=0
 
           for f in $CHANGED; do
@@ -53,12 +62,15 @@ jobs:
 
       - name: Block anything under uploads/
         run: |
+          ZERO_SHA="0000000000000000000000000000000000000000"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             RANGE="origin/${{ github.base_ref }}...HEAD"
+          elif [ "${{ github.event.before }}" = "$ZERO_SHA" ]; then
+            RANGE="$(git hash-object -t tree /dev/null) ${{ github.sha }}"
           else
             RANGE="${{ github.event.before }} ${{ github.sha }}"
           fi
-          CHANGED=$(git diff --name-only --diff-filter=ACM $RANGE -- uploads/ || true)
+          CHANGED=$(git diff --name-only --diff-filter=ACM $RANGE -- uploads/)
           if [ -n "$CHANGED" ]; then
             echo "::error::Files were committed under uploads/ — this path is git-ignored for a reason (local-disk fallback storage, never source-controlled). See docs/INFRASTRUCTURE_SETUP.md."
             echo "$CHANGED"
