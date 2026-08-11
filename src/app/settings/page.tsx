@@ -1,21 +1,54 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { Input, Field, FormRow } from "@/components/ui/form-field";
 import { useStore, roleLabel, Role } from "@/store/app-store";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Camera, Trash2 } from "lucide-react";
 import { MfaSettingsCard } from "@/components/settings/mfa-card";
+import { Avatar } from "@/components/ui/avatar";
 
 export default function SettingsPage() {
-  const { staff, updateStaff } = useStore();
+  const { staff, updateStaff, uploadAvatar, removeAvatar } = useStore();
   const { data: session, update } = useSession();
   const me = staff.find(s => s.id === session?.user?.id);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
 
   const [form, setForm] = useState({ name: me?.name ?? session?.user?.name ?? "", phone: me?.phone ?? "", password: "" });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    setAvatarError("");
+    setAvatarBusy(true);
+    try {
+      await uploadAvatar(file);
+      await update?.();
+    } catch (err) {
+      setAvatarError((err as Error).message || "Failed to upload photo");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function handleAvatarRemove() {
+    setAvatarError("");
+    setAvatarBusy(true);
+    try {
+      await removeAvatar();
+      await update?.();
+    } catch (err) {
+      setAvatarError((err as Error).message || "Failed to remove photo");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -51,12 +84,39 @@ export default function SettingsPage() {
 
           <Card className="p-4">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-blueprint-bg text-blueprint font-semibold flex items-center justify-center">
-                {session?.user?.initials ?? "?"}
+              <div className="relative">
+                <Avatar avatarUrl={me?.avatarUrl} initials={session?.user?.initials ?? "?"} name={session?.user?.name ?? undefined} size={56} fontSize={18} />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={avatarBusy}
+                  title="Upload photo"
+                  className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-ink text-white flex items-center justify-center border-2 border-surface disabled:opacity-50"
+                >
+                  <Camera size={12} />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handleAvatarChange}
+                  className="hidden"
+                />
               </div>
-              <div>
+              <div className="flex-1">
                 <div className="text-ink font-medium">{session?.user?.name}</div>
                 <div className="text-muted text-[12px]">{session?.user?.email} · {session?.user?.role ? roleLabel(session.user.role as Role) : ""}</div>
+                {me?.avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={handleAvatarRemove}
+                    disabled={avatarBusy}
+                    className="flex items-center gap-1 text-brick text-[11px] mt-1 disabled:opacity-50"
+                  >
+                    <Trash2 size={11} />Remove photo
+                  </button>
+                )}
+                {avatarError && <p className="text-brick text-[11px] mt-1">{avatarError}</p>}
               </div>
             </div>
             <form onSubmit={handleSave} className="flex flex-col gap-3.5">

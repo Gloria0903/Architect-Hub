@@ -52,6 +52,8 @@ model User {
   phone         String?
   department    String?
   initials      String
+  avatarUrl     String?
+  avatarKey     String?
   mfaEnabled    Boolean   @default(false)
   mfaSecret     String?
   joinDate      DateTime  @default(now())

@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { Input, Select, Textarea, Field, FormRow } from "@/components/ui/form-field";
 import { useStore, formatKsh, ProjectStatus, Priority } from "@/store/app-store";
 import { Plus, Repeat, Eye, Trash2 } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
 
 type Filter = ProjectStatus | "all";
 
@@ -128,7 +129,7 @@ export default function ProjectsPage() {
                     <td className="px-4 py-3 text-muted">{client?.name ?? "—"}</td>
                     <td className="px-4 py-3">
                       {arch
-                        ? <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded-full bg-blueprint-bg text-blueprint text-[9px] font-semibold flex items-center justify-center">{arch.initials}</div><span className="text-ink">{arch.name}</span></div>
+                        ? <div className="flex items-center gap-1.5"><Avatar avatarUrl={arch.avatarUrl} initials={arch.initials} name={arch.name} size={20} fontSize={9} /><span className="text-ink">{arch.name}</span></div>
                         : <span className="text-brick text-[11px] font-medium">Unassigned</span>}
                     </td>
                     <td className="px-4 py-3 font-mono text-[11px]">{formatKsh(p.budget)}</td>

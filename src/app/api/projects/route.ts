@@ -28,7 +28,7 @@ export async function GET() {
     include: {
       client: true,
       architect: { select: { id: true, name: true, initials: true, email: true } },
-      supervisor: { select: { id: true, name: true, initials: true } },
+      supervisor: { select: { id: true, name: true, initials: true, avatarUrl: true } },
       _count: { select: { dailyLogs: true, documents: true, comments: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -66,8 +66,8 @@ export async function POST(req: NextRequest) {
     },
     include: {
       client: true,
-      architect: { select: { id: true, name: true, initials: true } },
-      supervisor: { select: { id: true, name: true, initials: true } },
+      architect: { select: { id: true, name: true, initials: true, avatarUrl: true } },
+      supervisor: { select: { id: true, name: true, initials: true, avatarUrl: true } },
     },
   });
 

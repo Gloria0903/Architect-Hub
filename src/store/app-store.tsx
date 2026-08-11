@@ -15,6 +15,7 @@ export interface StaffMember {
   id: string;
   name: string;
   initials: string;
+  avatarUrl?: string | null;
   email: string;
   role: Role;
   phone?: string;
@@ -79,7 +80,7 @@ export interface DailyLog {
   projectId: string;
   project?: { id: string; name: string; sheetNo: string };
   authorId: string;
-  author?: { id: string; name: string; initials: string };
+  author?: { id: string; name: string; initials: string; avatarUrl?: string | null };
   date: string;
   workCompleted: string;
   challenges: string;
@@ -228,6 +229,8 @@ interface AppActions {
   markNotificationRead: (id: string) => Promise<void>;
   uploadDocument: (projectId: string, file: File) => Promise<void>;
   removeDocument: (id: string) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<void>;
+  removeAvatar: () => Promise<void>;
 }
 
 const Ctx = createContext<(AppState & AppActions) | null>(null);
@@ -389,6 +392,22 @@ const notifications = notificationResponse.notifications ?? [];
     await refresh();
   }, [refresh]);
 
+  const uploadAvatar = useCallback(async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/users/me/avatar", { method: "POST", body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Upload failed" }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    await refresh();
+  }, [refresh]);
+
+  const removeAvatar = useCallback(async () => {
+    await apiFetch("/api/users/me/avatar", { method: "DELETE" });
+    await refresh();
+  }, [refresh]);
+
   return (
     <Ctx.Provider value={{
       ...state,
@@ -396,7 +415,7 @@ const notifications = notificationResponse.notifications ?? [];
       addClient, updateClient, removeClient,
       addProject, updateProject, removeProject, reassignProject,
       addLog, addComment, resolveComment, addPayment, markNotificationRead,
-      uploadDocument, removeDocument,
+      uploadDocument, removeDocument, uploadAvatar, removeAvatar,
     }}>
       {children}
     </Ctx.Provider>

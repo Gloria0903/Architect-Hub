@@ -75,7 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     data: { fileUrl: `/api/documents/${newVersion.id}` },
     include: {
       project: { select: { id: true, name: true, sheetNo: true } },
-      uploadedBy: { select: { id: true, name: true, initials: true } },
+      uploadedBy: { select: { id: true, name: true, initials: true, avatarUrl: true } },
     },
   });
 
@@ -96,7 +96,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const rootId = existing.parentId ?? existing.id;
   const versions = await prisma.document.findMany({
     where: { OR: [{ id: rootId }, { parentId: rootId }] },
-    include: { uploadedBy: { select: { id: true, name: true, initials: true } } },
+    include: { uploadedBy: { select: { id: true, name: true, initials: true, avatarUrl: true } } },
     orderBy: { version: "desc" },
   });
 

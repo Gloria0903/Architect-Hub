@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/modal";
 import { Input, Select, Field, FormRow } from "@/components/ui/form-field";
 import { useStore, roleLabel, Role } from "@/store/app-store";
 import { Plus, Trash2, Edit2, ShieldAlert } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
 
 const roleColors: Record<Role, string> = {
   ADMIN: "bg-blueprint-bg text-blueprint",
@@ -89,7 +90,7 @@ export default function StaffPage() {
               <Card key={member.id} className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blueprint-bg text-blueprint flex items-center justify-center font-display font-semibold text-[14px]">{member.initials}</div>
+                    <Avatar avatarUrl={member.avatarUrl} initials={member.initials} name={member.name} size={40} fontSize={14} />
                     <div>
                       <div className="font-display font-semibold text-[14px] text-ink">{member.name}</div>
                       <div className="text-muted text-[11.5px]">{member.email}</div>

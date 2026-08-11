@@ -34,6 +34,7 @@ export async function GET() {
       id: true,
       name: true,
       initials: true,
+      avatarUrl: true,
       role: true,
       ...(admin && {
         email: true,
@@ -95,7 +96,7 @@ export async function POST(req: NextRequest) {
     },
     select: {
       id: true, name: true, email: true, role: true,
-      phone: true, department: true, initials: true, joinDate: true,
+      phone: true, department: true, initials: true, avatarUrl: true, joinDate: true,
       isActive: true, mustResetPassword: true,
     },
   });

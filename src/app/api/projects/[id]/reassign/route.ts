@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       where: { id },
       data: { architectId: parsed.data.toArchitectId },
       include: {
-        architect: { select: { id: true, name: true, initials: true } },
+        architect: { select: { id: true, name: true, initials: true, avatarUrl: true } },
         client: true,
       },
     }),

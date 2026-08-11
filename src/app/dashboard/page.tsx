@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { useStore, formatKsh, commentTypeLabel } from "@/store/app-store";
 import { useSession } from "next-auth/react";
 import { Upload, Wallet, Repeat, ClipboardList, AlertTriangle, CheckCircle, Bell } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
 
 export default function DashboardPage() {
   const { projects, staff, logs, comments, payments, notifications, markNotificationRead } = useStore();
@@ -252,7 +253,7 @@ export default function DashboardPage() {
                 return (
                   <div key={log.id} className="border-t border-line pt-2.5 mt-2.5 first:border-0 first:mt-0 first:pt-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <div className="w-5 h-5 rounded-full bg-blueprint-bg text-blueprint text-[9px] font-semibold flex items-center justify-center">{author?.initials}</div>
+                      <Avatar avatarUrl={author?.avatarUrl} initials={author?.initials} name={author?.name} size={20} fontSize={9} />
                       <span className="text-ink text-[12px] font-medium">{author?.name}</span>
                       <span className="text-muted text-[11px]">— {project?.name}</span>
                     </div>

@@ -4,10 +4,11 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { LogOut, User, Bell } from "lucide-react";
 import { useStore, roleLabel, Role } from "@/store/app-store";
+import { Avatar } from "@/components/ui/avatar";
 
 export function ProfileMenu() {
   const { data: session } = useSession();
-  const { notifications, markNotificationRead } = useStore();
+  const { notifications, markNotificationRead, staff } = useStore();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -26,6 +27,7 @@ export function ProfileMenu() {
 
   if (!session?.user) return null;
   const initials = session.user.initials || session.user.name?.slice(0, 2).toUpperCase() || "?";
+  const me = staff.find(s => s.id === session.user.id);
 
   return (
     <div className="flex items-center gap-3">
@@ -60,9 +62,9 @@ export function ProfileMenu() {
       <div className="relative" ref={menuRef}>
         <button
           onClick={() => setOpen(o => !o)}
-          className="w-[30px] h-[30px] rounded-full bg-blueprint-bg text-blueprint flex items-center justify-center font-semibold text-[12px] hover:ring-2 hover:ring-blueprint/30 transition-all"
+          className="rounded-full hover:ring-2 hover:ring-blueprint/30 transition-all"
         >
-          {initials}
+          <Avatar avatarUrl={me?.avatarUrl} initials={initials} name={session.user.name ?? undefined} size={30} />
         </button>
         {open && (
           <div className="absolute right-0 mt-2 w-56 bg-surface border border-line rounded-card shadow-xl z-50 overflow-hidden">

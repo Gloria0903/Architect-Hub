@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       }),
     },
     include: {
-      author: { select: { id: true, name: true, initials: true } },
+      author: { select: { id: true, name: true, initials: true, avatarUrl: true } },
       project: { select: { id: true, name: true, sheetNo: true } },
     },
     orderBy: { date: "desc" },
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
         progress: parsed.data.progress,
       },
       include: {
-        author: { select: { id: true, name: true, initials: true } },
+        author: { select: { id: true, name: true, initials: true, avatarUrl: true } },
         project: { select: { id: true, name: true, sheetNo: true } },
       },
     }),

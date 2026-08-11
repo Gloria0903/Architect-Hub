@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     },
     include: {
       project: { select: { id: true, name: true, sheetNo: true } },
-      uploadedBy: { select: { id: true, name: true, initials: true } },
+      uploadedBy: { select: { id: true, name: true, initials: true, avatarUrl: true } },
     },
     orderBy: { uploadedAt: "desc" },
   });
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     },
     include: {
       project: { select: { id: true, name: true, sheetNo: true } },
-      uploadedBy: { select: { id: true, name: true, initials: true } },
+      uploadedBy: { select: { id: true, name: true, initials: true, avatarUrl: true } },
     },
   });
 
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     data: { fileUrl: `/api/documents/${document.id}` },
     include: {
       project: { select: { id: true, name: true, sheetNo: true } },
-      uploadedBy: { select: { id: true, name: true, initials: true } },
+      uploadedBy: { select: { id: true, name: true, initials: true, avatarUrl: true } },
     },
   });
 

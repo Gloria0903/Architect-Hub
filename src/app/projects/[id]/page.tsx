@@ -10,6 +10,7 @@ import { Input, Select, Textarea, Field, FormRow } from "@/components/ui/form-fi
 import { useStore, formatKsh, formatFileSize, commentTypeLabel, priorityLabel, ProjectStatus, Priority } from "@/store/app-store";
 import Link from "next/link";
 import { Repeat, Upload, FileText, MessageSquare, Wallet, History, CheckCircle, Pencil, Trash2, Download, File as FileIcon, ArrowRightLeft } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
 
 const tabs = [
   { key: "overview", label: "Overview", icon: FileText },
@@ -228,7 +229,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <Card key={log.id} className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-blueprint-bg text-blueprint text-[10px] font-semibold flex items-center justify-center">{author?.initials}</div>
+                      <Avatar avatarUrl={author?.avatarUrl} initials={author?.initials} name={author?.name} size={28} fontSize={10} />
                       <div>
                         <div className="text-ink font-medium text-[12.5px]">{author?.name}</div>
                         <div className="text-muted text-[11px]">{log.date}</div>

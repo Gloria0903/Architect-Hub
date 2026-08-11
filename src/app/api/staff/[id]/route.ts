@@ -71,7 +71,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     },
     select: {
       id: true, name: true, email: true, role: true, phone: true, department: true,
-      initials: true, isActive: true, mustResetPassword: true,
+      initials: true, avatarUrl: true, isActive: true, mustResetPassword: true,
     },
   });
 

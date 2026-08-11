@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { useStore } from "@/store/app-store";
 import { Plus, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
 
 export default function DailyLogsPage() {
   const { logs, projects, staff } = useStore();
@@ -70,7 +71,7 @@ export default function DailyLogsPage() {
               <Card key={log.id} className={`overflow-hidden ${isToday ? "border-l-2 border-l-blueprint" : ""}`}>
                 <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-vellum/40" onClick={() => setExpandedId(expanded ? null : log.id)}>
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blueprint-bg text-blueprint text-[11px] font-semibold flex items-center justify-center shrink-0">{author?.initials}</div>
+                    <Avatar avatarUrl={author?.avatarUrl} initials={author?.initials} name={author?.name} size={32} fontSize={11} />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-ink font-medium text-[13px]">{author?.name}</span>

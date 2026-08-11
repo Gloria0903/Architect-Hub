@@ -27,9 +27,9 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     include: {
       client: true,
       architect: { select: { id: true, name: true, initials: true, email: true, phone: true } },
-      supervisor: { select: { id: true, name: true, initials: true } },
+      supervisor: { select: { id: true, name: true, initials: true, avatarUrl: true } },
       dailyLogs: {
-        include: { author: { select: { id: true, name: true, initials: true } } },
+        include: { author: { select: { id: true, name: true, initials: true, avatarUrl: true } } },
         orderBy: { date: "desc" },
       },
       documents: { orderBy: { uploadedAt: "desc" } },
@@ -96,8 +96,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     },
     include: {
       client: true,
-      architect: { select: { id: true, name: true, initials: true } },
-      supervisor: { select: { id: true, name: true, initials: true } },
+      architect: { select: { id: true, name: true, initials: true, avatarUrl: true } },
+      supervisor: { select: { id: true, name: true, initials: true, avatarUrl: true } },
     },
   });
 

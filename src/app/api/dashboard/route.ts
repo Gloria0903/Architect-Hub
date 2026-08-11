@@ -22,7 +22,7 @@ export async function GET() {
       where: projectAccessWhere(session),
       include: {
         client: { select: { id: true, name: true } },
-        architect: { select: { id: true, name: true, initials: true } },
+        architect: { select: { id: true, name: true, initials: true, avatarUrl: true } },
         supervisor: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -30,7 +30,7 @@ export async function GET() {
     prisma.dailyLog.findMany({
       where: { date: { gte: today } },
       include: {
-        author: { select: { id: true, name: true, initials: true } },
+        author: { select: { id: true, name: true, initials: true, avatarUrl: true } },
         project: { select: { id: true, name: true, sheetNo: true } },
       },
     }),
@@ -45,7 +45,7 @@ export async function GET() {
     }),
     prisma.dailyLog.findMany({
       include: {
-        author: { select: { id: true, name: true, initials: true } },
+        author: { select: { id: true, name: true, initials: true, avatarUrl: true } },
         project: { select: { id: true, name: true, sheetNo: true } },
       },
       orderBy: { submittedAt: "desc" },
