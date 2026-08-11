@@ -12,9 +12,6 @@ export default function DashboardPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
 
-  // Normalize a log/payment date (full ISO datetime from the API) down to YYYY-MM-DD
-  // so it can be compared against calendar-day strings. Comparing the raw ISO string
-  // to a date-only string (the old bug) always evaluates to false.
   const dayKey = (iso: string) => new Date(iso).toISOString().split("T")[0];
 
   const today = new Date().toISOString().split("T")[0];
@@ -23,13 +20,26 @@ export default function DashboardPage() {
   const delayed = projects.filter(p => p.status === "DELAYED");
   const atRisk = projects.filter(p => p.status === "AT_RISK");
   const onTrack = projects.filter(p => p.status === "ON_TRACK");
-  const totalOutstanding = projects.reduce((s, p) => s + (p.invoiced - p.paid), 0);
-  const totalRevenue = projects.reduce((s, p) => s + p.paid, 0);
   const unresolved = comments.filter(c => !c.resolvedAt);
 
-  // Real per-day log counts for the current Mon–Sun week (was a hardcoded fake array).
+  // Finance figures are computed either way (harmless — `payments` and
+  // `projects` are already API-scoped to an architect's own projects if
+  // they're not admin), but are only ever RENDERED behind `isAdmin` below.
+  // Company-wide revenue/finance isn't something an architect should see,
+  // full stop — not even a correctly-scoped slice of it.
+  const totalOutstanding = projects.reduce((s, p) => s + (p.invoiced - p.paid), 0);
+  const totalRevenue = projects.reduce((s, p) => s + p.paid, 0);
+
+  // Same reasoning as the finance figures: only meaningful/shown to admins.
+  // Computing "who hasn't submitted" requires comparing against total
+  // non-admin headcount, which is exactly the kind of company-wide,
+  // cross-colleague inference an architect shouldn't be able to derive.
+  const missingSubmissions = isAdmin
+    ? staff.filter(s => s.role !== "ADMIN").length - todayLogs.length
+    : 0;
+
   const now = new Date();
-  const mondayOffset = (now.getDay() + 6) % 7; // 0 = Monday ... 6 = Sunday
+  const mondayOffset = (now.getDay() + 6) % 7;
   const startOfWeek = new Date(now);
   startOfWeek.setHours(0, 0, 0, 0);
   startOfWeek.setDate(now.getDate() - mondayOffset);
@@ -42,8 +52,6 @@ export default function DashboardPage() {
   const maxWeeklyLogs = Math.max(...weeklyLogs, 1);
   const todayIndex = mondayOffset;
 
-  // Real monthly revenue for the last 6 months, from actual payment records
-  // (was a hardcoded fake SVG line + a hardcoded "+12.4%" label).
   const monthLabel = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
   const monthBuckets = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
@@ -90,25 +98,42 @@ export default function DashboardPage() {
             <div className="font-display font-bold text-[28px] text-ink mt-0.5">{projects.length}</div>
             <div className="text-moss text-[11px] mt-1">↑ {onTrack.length} on track</div>
           </Card>
+
+          {isAdmin ? (
+            <Card className="p-3.5">
+              <div className="text-muted text-[11px]">Total revenue</div>
+              <div className="font-mono font-medium text-[17px] text-ink mt-1">{formatKsh(totalRevenue)}</div>
+              <div className="text-muted text-[11px] mt-1.5">Outstanding: {formatKsh(totalOutstanding)}</div>
+            </Card>
+          ) : (
+            <Card className="p-3.5">
+              <div className="text-muted text-[11px]">Unresolved client comments</div>
+              <div className="font-display font-bold text-[28px] text-ochre mt-0.5">{unresolved.length}</div>
+              <div className="text-muted text-[11px] mt-1">{delayed.length} delayed</div>
+            </Card>
+          )}
+
           <Card className="p-3.5">
-            <div className="text-muted text-[11px]">Total revenue</div>
-            <div className="font-mono font-medium text-[17px] text-ink mt-1">{formatKsh(totalRevenue)}</div>
-            <div className="text-muted text-[11px] mt-1.5">Outstanding: {formatKsh(totalOutstanding)}</div>
-          </Card>
-          <Card className="p-3.5">
-            <div className="text-muted text-[11px]">Logs today</div>
+            <div className="text-muted text-[11px]">{isAdmin ? "Logs today" : "Your logs today"}</div>
             <div className="font-display font-bold text-[28px] text-ink mt-0.5">{todayLogs.length}</div>
-            <div className="text-brick text-[11px] mt-1">{staff.filter(s=>s.role!=="ADMIN").length - todayLogs.length} missing submissions</div>
+            {isAdmin ? (
+              <div className="text-brick text-[11px] mt-1">{missingSubmissions} missing submissions</div>
+            ) : (
+              <div className="text-muted text-[11px] mt-1">Across your projects</div>
+            )}
           </Card>
-          <Card className="p-3.5">
-            <div className="text-muted text-[11px]">Unresolved client comments</div>
-            <div className="font-display font-bold text-[28px] text-ochre mt-0.5">{unresolved.length}</div>
-            <div className="text-muted text-[11px] mt-1">{delayed.length} delayed projects</div>
-          </Card>
+
+          {isAdmin && (
+            <Card className="p-3.5">
+              <div className="text-muted text-[11px]">Unresolved client comments</div>
+              <div className="font-display font-bold text-[28px] text-ochre mt-0.5">{unresolved.length}</div>
+              <div className="text-muted text-[11px] mt-1">{delayed.length} delayed projects</div>
+            </Card>
+          )}
         </div>
 
         {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3.5">
+        <div className={`grid grid-cols-1 gap-3 mb-3.5 ${isAdmin ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
           <Card className="p-3.5">
             <div className="font-medium text-ink text-[12.5px] mb-3">Project health</div>
             <div className="flex items-center gap-4">
@@ -126,7 +151,7 @@ export default function DashboardPage() {
             </div>
           </Card>
           <Card className="p-3.5">
-            <div className="font-medium text-ink text-[12.5px] mb-2">Daily logs this week</div>
+            <div className="font-medium text-ink text-[12.5px] mb-2">{isAdmin ? "Daily logs this week" : "Your daily logs this week"}</div>
             <svg width="100%" height="70" viewBox="0 0 160 70" aria-hidden="true">
               {weeklyLogs.map((v, i) => {
                 const h = v === 0 ? 2 : (v / maxWeeklyLogs) * 56;
@@ -139,26 +164,28 @@ export default function DashboardPage() {
               {["M","T","W","T","F","S","S"].map((d,i)=><span key={i}>{d}</span>)}
             </div>
           </Card>
-          <Card className="p-3.5">
-            <div className="flex justify-between items-center mb-2">
-              <div className="font-medium text-ink text-[12.5px]">Revenue trend</div>
-              <div className={`text-[11px] ${revenueChangePct >= 0 ? "text-moss" : "text-brick"}`}>
-                {revenueChangePct >= 0 ? "+" : ""}{revenueChangePct}%
+          {isAdmin && (
+            <Card className="p-3.5">
+              <div className="flex justify-between items-center mb-2">
+                <div className="font-medium text-ink text-[12.5px]">Revenue trend</div>
+                <div className={`text-[11px] ${revenueChangePct >= 0 ? "text-moss" : "text-brick"}`}>
+                  {revenueChangePct >= 0 ? "+" : ""}{revenueChangePct}%
+                </div>
               </div>
-            </div>
-            <svg width="100%" height="68" viewBox="0 0 220 68" aria-hidden="true">
-              <polyline points={trendPolyline} fill="none" stroke="#2451C4" strokeWidth="2" />
-              <polyline points={trendArea} fill="#E7EDFA" stroke="none" />
-              {trendPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="#2451C4" />)}
-            </svg>
-          </Card>
+              <svg width="100%" height="68" viewBox="0 0 220 68" aria-hidden="true">
+                <polyline points={trendPolyline} fill="none" stroke="#2451C4" strokeWidth="2" />
+                <polyline points={trendArea} fill="#E7EDFA" stroke="none" />
+                {trendPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="#2451C4" />)}
+              </svg>
+            </Card>
+          )}
         </div>
 
         {/* Projects Table + Notifications */}
         <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3 mb-3.5">
           <Card className="p-3.5">
             <div className="flex justify-between items-center mb-3">
-              <div className="font-medium text-ink text-[12.5px]">All projects</div>
+              <div className="font-medium text-ink text-[12.5px]">{isAdmin ? "All projects" : "My projects"}</div>
               <Link href="/projects" className="text-blueprint text-[11px] font-mono">Manage →</Link>
             </div>
             <table className="w-full border-collapse text-[11.5px]">
@@ -215,7 +242,7 @@ export default function DashboardPage() {
           <Card className="p-3.5">
             <div className="flex justify-between items-center mb-3">
               <div className="font-medium text-ink text-[12.5px]">Today&apos;s submitted logs</div>
-              <Link href="/daily-logs" className="text-blueprint text-[11px] font-mono">View all →</Link>
+              <Link href="/daily-logs" className="text-blueprint text-[11px] font-mono">View all→</Link>
             </div>
             {todayLogs.length === 0
               ? <p className="text-muted text-[12px]">No logs submitted yet today.</p>

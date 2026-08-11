@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { canManageClients } from "@/lib/rbac";
+import { canManageClients, isAdmin } from "@/lib/rbac";
 import { z } from "zod";
 
 const Schema = z.object({
@@ -16,12 +16,25 @@ export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const admin = isAdmin(session);
+  // Architects/supervisors only see clients they actually work with — a
+  // client whose projects they have no involvement in shouldn't appear at
+  // all, not even in a trimmed-down form.
+  const projectScope = { OR: [{ architectId: session.user.id }, { supervisorId: session.user.id }] };
+
   const clients = await prisma.client.findMany({
+    where: admin ? {} : { projects: { some: projectScope } },
     include: {
       projects: {
         select: { id: true, sheetNo: true, name: true, status: true, progress: true },
+        ...(admin ? {} : { where: projectScope }),
       },
-      _count: { select: { projects: true, comments: true } },
+      _count: {
+        select: {
+          projects: admin ? true : { where: projectScope },
+          comments: true,
+        },
+      },
     },
     orderBy: { name: "asc" },
   });

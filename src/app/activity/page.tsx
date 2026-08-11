@@ -39,7 +39,7 @@ export default function ActivityPage() {
     }),
     ...payments.map(p => {
       const project = projects.find(pr => pr.id === p.projectId);
-      return { id: p.id, type: "payment" as EventType, actor: p.recordedBy?.name ?? "Unknown", description: `Payment recorded — KSh ${p.amount.toLocaleString()}`, timestamp: p.date + "T12:00:00", projectName: project?.name };
+      return { id: p.id, type: "payment" as EventType, actor: p.recordedBy?.name ?? "Unknown", description: `Payment recorded — KSh ${p.amount.toLocaleString()}`, timestamp: p.date, projectName: project?.name };
     }),
     ...comments.map(c => {
       const project = projects.find(p => p.id === c.projectId);
@@ -52,7 +52,7 @@ export default function ActivityPage() {
     ...projects.filter(p => (p.assignmentHistory?.length ?? 0) > 0).flatMap(p =>
       (p.assignmentHistory ?? []).map(r => {
         const to = staff.find(s => s.id === r.toArchitectId);
-        return { id: r.id, type: "takeover" as EventType, actor: r.performedBy?.name ?? "Unknown", description: `Project reassigned to ${to?.name ?? "unknown"}`, timestamp: r.date + "T09:00:00", projectName: p.name };
+        return { id: r.id, type: "takeover" as EventType, actor: r.performedBy?.name ?? "Unknown", description: `Project reassigned to ${to?.name ?? "unknown"}`, timestamp: r.date, projectName: p.name };
       })
     ),
   ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
