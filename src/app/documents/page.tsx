@@ -33,6 +33,7 @@ export default function DocumentsPage() {
   const visible = filterProject === "all" ? documents : documents.filter(f => f.projectId === filterProject);
 
   async function handleFiles(list: FileList | null) {
+    console.log("handleFiles called", list, "filterProject:", filterProject, "uploadProject:", uploadProject); // TEMP DEBUG
     if (!list || list.length === 0) return;
     const targetProject = filterProject !== "all" ? filterProject : uploadProject;
     if (!targetProject) {

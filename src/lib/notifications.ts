@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { enqueueEmail, type EmailJobPayload } from "@/lib/queues/email-queue";
+import { Prisma } from "@prisma/client";
 
 type NotificationType = "INFO" | "WARNING" | "SUCCESS" | "ERROR";
 
@@ -7,6 +8,7 @@ async function dispatch(params: {
   userId: string;
   message: string;
   type: NotificationType;
+  dedupeKey?: string;
   buildEmail: (user: { email: string; name: string }) => EmailJobPayload;
 }) {
   const user = await prisma.user.findUnique({
@@ -17,9 +19,22 @@ async function dispatch(params: {
   // In-app notification always gets written, even for inactive/no-email
   // edge cases — it's cheap, and it keeps the activity trail complete for
   // Take Over Project even if email delivery is skipped.
-  await prisma.notification.create({
-    data: { userId: params.userId, message: params.message, type: params.type },
-  });
+  try {
+    await prisma.notification.create({
+      data: {
+        userId: params.userId,
+        message: params.message,
+        type: params.type,
+        dedupeKey: params.dedupeKey,
+      },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      // Already sent this exact reminder to this user — worker retry/restart, skip silently.
+      return;
+    }
+    throw e;
+  }
 
   if (!user || !user.isActive || !user.email) return;
 
@@ -111,6 +126,7 @@ export async function notifyDeadlineApproaching(params: {
     userId: params.userId,
     type: params.daysRemaining <= 2 ? "WARNING" : "INFO",
     message: `${params.projectName} is due in ${params.daysRemaining} day${params.daysRemaining === 1 ? "" : "s"}`,
+    dedupeKey: `deadline:${params.projectId}:${params.daysRemaining}:${params.dueDate.toISOString().slice(0, 10)}`,
     buildEmail: (user) => ({
       kind: "DEADLINE_APPROACHING",
       to: user.email,
@@ -133,6 +149,7 @@ export async function notifyMissingDailyReport(params: {
     userId: params.userId,
     type: "WARNING",
     message: `Missing daily report for ${params.projectName} on ${params.date.toLocaleDateString()}`,
+    dedupeKey: `missing-report:${params.projectId}:${params.userId}:${params.date.toISOString().slice(0, 10)}`,
     buildEmail: (user) => ({
       kind: "MISSING_DAILY_REPORT",
       to: user.email,

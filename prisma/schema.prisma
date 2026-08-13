@@ -282,9 +282,11 @@ model Notification {
   type      NotificationType @default(INFO)
   read      Boolean          @default(false)
   createdAt DateTime         @default(now())
+  dedupeKey String?
 
   userId    String
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, read])
+  @@unique([userId, dedupeKey])
 }
