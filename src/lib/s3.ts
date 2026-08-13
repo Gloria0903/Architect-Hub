@@ -88,3 +88,40 @@ export async function getDownloadUrl(key: string, downloadFileName?: string) {
 export async function deleteObject(key: string) {
   await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
 }
+
+// Add these two functions to your existing src/lib/s3.ts — append them
+// anywhere after the existing imports/BUCKET constant. They reuse the same
+// `s3` client and `BUCKET` already defined in that file; no new imports
+// needed since PutObjectCommand and GetObjectCommand are already imported.
+//
+// These are deliberately separate from getUploadUrl/getDownloadUrl above —
+// those are presigned URLs for direct-to-browser uploads (unused today).
+// These two are for the server-passthrough flow storage.ts actually uses,
+// where the app has already read the file into memory and validated it
+// (magic-byte sniffing) before this ever gets called.
+
+export async function putObjectBuffer(
+  key: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<void> {
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+      ServerSideEncryption: "AES256",
+    })
+  );
+}
+
+export async function getObjectBuffer(key: string): Promise<Buffer> {
+  const result = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
+  const stream = result.Body as unknown as NodeJS.ReadableStream;
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
