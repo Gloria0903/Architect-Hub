@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface AvatarProps {
@@ -23,12 +23,14 @@ interface AvatarProps {
  * removal), it falls back to initials rather than showing a broken image.
  */
 export function Avatar({ avatarUrl, initials, name, size = 32, fontSize, className }: AvatarProps) {
-  const [errored, setErrored] = useState(false);
+  // Track which URL last failed to load, rather than a plain boolean flag.
+  // This derives "errored" straight from render instead of needing an effect
+  // to reset it when avatarUrl changes (e.g. after a fresh upload swaps in a
+  // new ?v= cache-buster) — avoids the extra render pass a setState-in-effect
+  // pattern would cause.
+  const [erroredUrl, setErroredUrl] = useState<string | null>(null);
 
-  // Reset the broken-image flag whenever the URL itself changes (e.g. after
-  // a fresh upload swaps in a new ?v= cache-buster).
-  useEffect(() => setErrored(false), [avatarUrl]);
-
+  const errored = erroredUrl !== null && erroredUrl === avatarUrl;
   const fallback = initials || name?.slice(0, 2).toUpperCase() || "?";
   const showPhoto = Boolean(avatarUrl) && !errored;
 
@@ -38,7 +40,7 @@ export function Avatar({ avatarUrl, initials, name, size = 32, fontSize, classNa
       <img
         src={avatarUrl!}
         alt={name || fallback}
-        onError={() => setErrored(true)}
+        onError={() => setErroredUrl(avatarUrl ?? null)}
         className={cn("rounded-full object-cover shrink-0 bg-blueprint-bg", className)}
         style={{ width: size, height: size }}
       />
