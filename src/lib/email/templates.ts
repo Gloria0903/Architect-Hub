@@ -50,10 +50,21 @@ function layout(params: { preheader: string; heading: string; body: string; ctaL
 }
 
 export function renderEmail(payload: EmailJobPayload): { subject: string; html: string } {
-  const projectUrl = `${APP_URL}/projects/${payload.projectId}`;
-
   switch (payload.kind) {
-    case "PROJECT_ASSIGNED":
+    case "PASSWORD_RESET":
+      return {
+        subject: "Reset your Architect Hub password",
+        html: layout({
+          preheader: "Reset your password — link expires soon",
+          heading: "Reset your password",
+          body: `Hi ${payload.recipientName}, we received a request to reset your password. This link expires in ${payload.expiresInMinutes} minutes. If you didn't request this, you can safely ignore this email.`,
+          ctaLabel: "Reset password",
+          ctaUrl: payload.resetUrl,
+        }),
+      };
+
+    case "PROJECT_ASSIGNED": {
+      const projectUrl = `${APP_URL}/projects/${payload.projectId}`;
       return {
         subject: `You've been assigned to ${payload.projectName}`,
         html: layout({
@@ -64,8 +75,10 @@ export function renderEmail(payload: EmailJobPayload): { subject: string; html: 
           ctaUrl: projectUrl,
         }),
       };
+    }
 
-    case "DOCUMENT_UPLOADED":
+    case "DOCUMENT_UPLOADED": {
+      const projectUrl = `${APP_URL}/projects/${payload.projectId}`;
       return {
         subject: `New document on ${payload.projectName}`,
         html: layout({
@@ -76,8 +89,10 @@ export function renderEmail(payload: EmailJobPayload): { subject: string; html: 
           ctaUrl: `${projectUrl}?tab=documents`,
         }),
       };
+    }
 
     case "CLIENT_COMMENT": {
+      const projectUrl = `${APP_URL}/projects/${payload.projectId}`;
       const typeLabel: Record<typeof payload.commentType, string> = {
         FEEDBACK: "feedback",
         APPROVAL: "an approval",
@@ -96,7 +111,8 @@ export function renderEmail(payload: EmailJobPayload): { subject: string; html: 
       };
     }
 
-    case "DEADLINE_APPROACHING":
+    case "DEADLINE_APPROACHING": {
+      const projectUrl = `${APP_URL}/projects/${payload.projectId}`;
       return {
         subject: `${payload.projectName} is due in ${payload.daysRemaining} day${payload.daysRemaining === 1 ? "" : "s"}`,
         html: layout({
@@ -107,8 +123,10 @@ export function renderEmail(payload: EmailJobPayload): { subject: string; html: 
           ctaUrl: projectUrl,
         }),
       };
+    }
 
-    case "MISSING_DAILY_REPORT":
+    case "MISSING_DAILY_REPORT": {
+      const projectUrl = `${APP_URL}/projects/${payload.projectId}`;
       return {
         subject: `Missing daily report — ${payload.projectName}`,
         html: layout({
@@ -119,8 +137,10 @@ export function renderEmail(payload: EmailJobPayload): { subject: string; html: 
           ctaUrl: `${projectUrl}?tab=logs`,
         }),
       };
+    }
 
-    case "PAYMENT_UPDATE":
+    case "PAYMENT_UPDATE": {
+      const projectUrl = `${APP_URL}/projects/${payload.projectId}`;
       return {
         subject: `Payment recorded on ${payload.projectName}`,
         html: layout({
@@ -131,5 +151,6 @@ export function renderEmail(payload: EmailJobPayload): { subject: string; html: 
           ctaUrl: `${projectUrl}?tab=finance`,
         }),
       };
+    }
   }
 }

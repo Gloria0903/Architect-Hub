@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { enqueueEmail } from "@/lib/queues/email-queue";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -39,11 +40,13 @@ export async function POST(req: Request) {
 
   const resetUrl = `${process.env.NEXTAUTH_URL || ""}/reset-password?token=${rawToken}`;
 
-  // NOTE: no transactional email provider is wired up yet (see README —
-  // Phase E covers Resend integration). Until then this logs to the server
-  // console so the flow is testable end-to-end in development. Before
-  // production launch, replace this with an actual email send.
-  console.log(`[password reset] ${email} -> ${resetUrl}`);
+  await enqueueEmail({
+    kind: "PASSWORD_RESET",
+    to: user.email,
+    recipientName: user.name,
+    resetUrl,
+    expiresInMinutes: RESET_TOKEN_TTL_MS / 60_000,
+  });
 
   return genericResponse;
 }

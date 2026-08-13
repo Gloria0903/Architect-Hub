@@ -19,6 +19,15 @@ export type EmailJobPayload =
       assignedRole: "ARCHITECT" | "SUPERVISOR";
       assignedBy: string;
     }
+
+  | {
+      kind: "PASSWORD_RESET";
+      to: string;
+      recipientName: string;
+      resetUrl: string;
+      expiresInMinutes: number;
+    }
+    
   | {
       kind: "DOCUMENT_UPLOADED";
       to: string;
