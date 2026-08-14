@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { z } from "zod";
+import { canAccessProject } from "@/lib/rbac";
 
 const Schema = z.object({
   projectId: z.string(),
@@ -51,7 +52,29 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const parsed = Schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  
+  const project = await prisma.project.findUnique({
+  where: { id: parsed.data.projectId },
+  select: {
+    id: true,
+    architectId: true,
+    supervisorId: true,
+  },
+});
 
+if (!project) {
+  return NextResponse.json(
+    { error: "Project not found" },
+    { status: 404 }
+  );
+}
+
+if (!canAccessProject(session, project)) {
+  return NextResponse.json(
+    { error: "You are not assigned to this project" },
+    { status: 403 }
+  );
+}
   const logDate = parsed.data.date ? new Date(parsed.data.date) : new Date();
   logDate.setHours(0, 0, 0, 0);
 

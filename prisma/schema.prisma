@@ -145,6 +145,7 @@ model Project {
   paid          Float         @default(0)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  archivedAt DateTime?
 
   // Relations
   clientId      String
@@ -164,6 +165,7 @@ model Project {
   @@index([architectId])
   @@index([clientId])
   @@index([sheetNo])
+  @@index([archivedAt])
 }
 
 model DailyLog {

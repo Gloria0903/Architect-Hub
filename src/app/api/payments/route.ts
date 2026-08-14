@@ -48,7 +48,36 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const parsed = Schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  
+  const project = await prisma.project.findUnique({
+  where: { id: parsed.data.projectId },
+  select: {
+    id: true,
+    name: true,
+    sheetNo: true,
+    budget: true,
+    invoiced: true,
+    paid: true,
+    architectId: true,
+    supervisorId: true,
+  },
+});
 
+if (!project) {
+  return NextResponse.json(
+    { error: "Project not found" },
+    { status: 404 }
+  );
+}
+
+if (parsed.data.amount > project.invoiced - project.paid) {
+  return NextResponse.json(
+    {
+      error: `Payment exceeds outstanding invoice balance of ${project.invoiced - project.paid}`,
+    },
+    { status: 400 }
+  );
+}
   const [payment, updatedProject] = await prisma.$transaction([
     prisma.payment.create({
       data: {

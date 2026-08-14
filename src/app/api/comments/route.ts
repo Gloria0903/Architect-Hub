@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { CommentType } from "@prisma/client";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, canAccessProject } from "@/lib/rbac";
 import { notifyClientComment } from "@/lib/notifications";
 import { z } from "zod";
+
 
 const Schema = z.object({
   projectId: z.string(),
@@ -47,7 +48,37 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const parsed = Schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  
+  const project = await prisma.project.findUnique({
+  where: { id: parsed.data.projectId },
+  select: {
+    id: true,
+    clientId: true,
+    architectId: true,
+    supervisorId: true,
+  },
+});
 
+if (!project) {
+  return NextResponse.json(
+    { error: "Project not found" },
+    { status: 404 }
+  );
+}
+
+if (!canAccessProject(session, project)) {
+  return NextResponse.json(
+    { error: "You do not have access to this project" },
+    { status: 403 }
+  );
+}
+
+if (project.clientId !== parsed.data.clientId) {
+  return NextResponse.json(
+    { error: "Client does not belong to this project" },
+    { status: 400 }
+  );
+}
   const comment = await prisma.clientComment.create({
     data: {
       projectId: parsed.data.projectId,
