@@ -6,8 +6,8 @@ import { notifyProjectAssignment } from "@/lib/notifications";
 import { z } from "zod";
 
 const Schema = z.object({
-  toArchitectId: z.string(),
-  reason: z.string().optional(),
+  toArchitectId: z.string().min(1, "Architect is required"),
+  reason: z.string().max(1000).optional(),
 });
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -26,7 +26,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  if (parsed.data.toArchitectId === project.architectId) {
+  return NextResponse.json(
+    { error: "Project is already assigned to this architect" },
+    { status: 400 }
+  );
+}
   const toArchitect = await prisma.user.findUnique({ where: { id: parsed.data.toArchitectId } });
+  if (project.architectId === parsed.data.toArchitectId) {
+  return NextResponse.json(
+    { error: "Project is already assigned to this architect" },
+    { status: 400 }
+  );
+}
   if (!toArchitect || toArchitect.role !== "ARCHITECT") {
     return NextResponse.json({ error: "Can only assign to an architect" }, { status: 400 });
   }
