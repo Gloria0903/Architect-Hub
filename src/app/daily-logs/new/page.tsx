@@ -1,32 +1,22 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { Select, Textarea, Field } from "@/components/ui/form-field";
-import { useStore, formatFileSize } from "@/store/app-store";
-import { CheckCircle, X, FileText } from "lucide-react";
+import { useStore } from "@/store/app-store";
+import { CheckCircle } from "lucide-react";
+import { DocumentUploader } from "@/components/documents/document-uploader";
 
 export default function NewDailyLogPage() {
   const router = useRouter();
-  const { projects, addLog, uploadDocument } = useStore();
+  const { projects, addLog, refresh } = useStore();
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const [progress, setProgress] = useState(50);
   const [form, setForm] = useState({ projectId: "", workCompleted: "", challenges: "", pendingWork: "", nextActions: "" });
-  const [files, setFiles] = useState<File[]>([]);
-  const [dragging, setDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  function addFiles(list: FileList | null) {
-    if (!list) return;
-    setFiles(f => [...f, ...Array.from(list)]);
-  }
-
-  function removeFile(idx: number) {
-    setFiles(f => f.filter((_, i) => i !== idx));
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,10 +31,9 @@ export default function NewDailyLogPage() {
         nextActions: form.nextActions,
         progress,
       });
-      // Attach any selected files to the project's documents.
-      for (const file of files) {
-        await uploadDocument(form.projectId, file);
-      }
+      // Attachments (if any) already uploaded via DocumentUploader as the
+      // user added them — they're tied to the project, not the log entry
+      // itself, same as every other document in the system.
       setSubmitted(true);
       setTimeout(() => router.push("/daily-logs"), 1800);
     } catch (err) {
@@ -103,36 +92,20 @@ export default function NewDailyLogPage() {
             </div>
 
             <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={e => { addFiles(e.target.files); e.target.value = ""; }}
-              />
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={e => { e.preventDefault(); setDragging(true); }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={e => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
-                className={`border border-dashed rounded-md p-5 text-center text-[12px] transition-colors cursor-pointer ${dragging ? "border-blueprint bg-blueprint-bg text-blueprint" : "border-line text-muted hover:border-blueprint/50"}`}
-              >
-                <div className="font-medium text-ink mb-0.5">Attach files (optional)</div>
-                Drag and drop drawings, photos, or documents — or click to browse.
-              </div>
-              {files.length > 0 && (
-                <div className="mt-2 flex flex-col gap-1.5">
-                  {files.map((file, i) => (
-                    <div key={i} className="flex items-center justify-between bg-vellum rounded-md px-3 py-1.5 text-[11.5px]">
-                      <span className="flex items-center gap-2 text-ink truncate"><FileText size={13} className="text-muted shrink-0" />{file.name}</span>
-                      <span className="flex items-center gap-2 shrink-0">
-                        <span className="text-muted font-mono">{formatFileSize(file.size)}</span>
-                        <button type="button" onClick={() => removeFile(i)} className="text-muted hover:text-brick"><X size={13} /></button>
-                      </span>
-                    </div>
-                  ))}
+              <label className="text-[12px] text-muted block mb-1.5">Attach files (optional)</label>
+              {form.projectId ? (
+                <DocumentUploader
+                  key={form.projectId}
+                  target={{ mode: "new", projectId: form.projectId, category: "SITE_REPORT" }}
+                  onComplete={refresh}
+                  onError={setUploadError}
+                />
+              ) : (
+                <div className="border border-dashed rounded-md p-5 text-center text-[12px] border-line text-muted">
+                  Select a project above to attach drawings, photos, or documents.
                 </div>
               )}
+              {uploadError && <p className="text-brick text-[12px] mt-1.5">{uploadError}</p>}
             </div>
 
             {error && <p className="text-brick text-[12px]">{error}</p>}
