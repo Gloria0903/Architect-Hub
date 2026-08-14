@@ -44,40 +44,41 @@ enum NotificationType {
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  password      String
-  role          Role      @default(ARCHITECT)
-  phone         String?
-  department    String?
-  initials      String
-  avatarUrl     String?
-  avatarKey     String?
-  mfaEnabled    Boolean   @default(false)
-  mfaSecret     String?
-  joinDate      DateTime  @default(now())
-  lastLoginAt   DateTime?
-  isActive      Boolean   @default(true)
-  mustResetPassword Boolean @default(false)
-  failedLoginAttempts Int  @default(0)
-  lockedUntil   DateTime?
-  passwordChangedAt DateTime @default(now())
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  name                String
+  email               String    @unique
+  password            String
+  role                Role      @default(ARCHITECT)
+  phone               String?
+  department          String?
+  initials            String
+  avatarUrl           String?
+  avatarKey           String?
+  mfaEnabled          Boolean   @default(false)
+  mfaSecret           String?
+  joinDate            DateTime  @default(now())
+  lastLoginAt         DateTime?
+  isActive            Boolean   @default(true)
+  mustResetPassword   Boolean   @default(false)
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  passwordChangedAt   DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // Relations
-  assignedProjects    Project[]          @relation("ArchitectProjects")
-  supervisedProjects  Project[]          @relation("SupervisorProjects")
+  assignedProjects    Project[]            @relation("ArchitectProjects")
+  supervisedProjects  Project[]            @relation("SupervisorProjects")
   dailyLogs           DailyLog[]
-  assignmentsMade     AssignmentRecord[] @relation("PerformedByUser")
-  fromAssignments     AssignmentRecord[] @relation("FromArchitect")
-  toAssignments       AssignmentRecord[] @relation("ToArchitect")
+  assignmentsMade     AssignmentRecord[]   @relation("PerformedByUser")
+  fromAssignments     AssignmentRecord[]   @relation("FromArchitect")
+  toAssignments       AssignmentRecord[]   @relation("ToArchitect")
   notifications       Notification[]
   payments            Payment[]
   loginEvents         LoginEvent[]
-  documentsUploaded   Document[]         @relation("DocumentUploader")
+  documentsUploaded   Document[]           @relation("DocumentUploader")
   passwordResetTokens PasswordResetToken[]
+  activityLogs        ActivityLog[]
 
   @@index([email])
   @@index([role])
@@ -90,8 +91,8 @@ model PasswordResetToken {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
 
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
@@ -105,61 +106,62 @@ model LoginEvent {
   reason    String?
   createdAt DateTime @default(now())
 
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([createdAt])
 }
 
 model Client {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   name          String
   contactPerson String
   email         String?
   phone         String?
   address       String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  projects      Project[]
-  comments      ClientComment[]
+  projects Project[]
+  comments ClientComment[]
 
   @@index([name])
 }
 
 model Project {
-  id            String        @id @default(cuid())
-  sheetNo       String        @unique
-  name          String
-  description   String?
-  location      String
-  status        ProjectStatus @default(ON_TRACK)
-  progress      Int           @default(0)
-  priority      Priority      @default(MEDIUM)
-  startDate     DateTime
-  dueDate       DateTime
+  id             String        @id @default(cuid())
+  sheetNo        String        @unique
+  name           String
+  description    String?
+  location       String
+  status         ProjectStatus @default(ON_TRACK)
+  progress       Int           @default(0)
+  priority       Priority      @default(MEDIUM)
+  startDate      DateTime
+  dueDate        DateTime
   completionDate DateTime?
-  budget        Float         @default(0)
-  invoiced      Float         @default(0)
-  paid          Float         @default(0)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  archivedAt DateTime?
+  budget         Float         @default(0)
+  invoiced       Float         @default(0)
+  paid           Float         @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  archivedAt     DateTime?
 
   // Relations
-  clientId      String
-  client        Client             @relation(fields: [clientId], references: [id])
-  architectId   String?
-  architect     User?              @relation("ArchitectProjects", fields: [architectId], references: [id])
-  supervisorId  String?
-  supervisor    User?              @relation("SupervisorProjects", fields: [supervisorId], references: [id])
+  clientId     String
+  client       Client  @relation(fields: [clientId], references: [id])
+  architectId  String?
+  architect    User?   @relation("ArchitectProjects", fields: [architectId], references: [id])
+  supervisorId String?
+  supervisor   User?   @relation("SupervisorProjects", fields: [supervisorId], references: [id])
 
   dailyLogs         DailyLog[]
   documents         Document[]
   comments          ClientComment[]
   payments          Payment[]
   assignmentHistory AssignmentRecord[]
+  activityLogs      ActivityLog[]
 
   @@index([status])
   @@index([architectId])
@@ -169,19 +171,19 @@ model Project {
 }
 
 model DailyLog {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   date          DateTime
   workCompleted String
-  challenges    String    @default("")
-  pendingWork   String    @default("")
-  nextActions   String    @default("")
+  challenges    String   @default("")
+  pendingWork   String   @default("")
+  nextActions   String   @default("")
   progress      Int
-  submittedAt   DateTime  @default(now())
+  submittedAt   DateTime @default(now())
 
-  projectId     String
-  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  authorId      String
-  author        User      @relation(fields: [authorId], references: [id])
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User    @relation(fields: [authorId], references: [id])
 
   @@unique([projectId, authorId, date])
   @@index([projectId])
@@ -199,28 +201,28 @@ enum DocumentCategory {
 }
 
 model Document {
-  id           String           @id @default(cuid())
-  name         String
-  category     DocumentCategory @default(OTHER)
-  fileKey      String
-  fileUrl      String
-  fileSize     Int
-  mimeType     String
-  version      Int              @default(1)
-  isLatest     Boolean          @default(true)
-  uploadedAt   DateTime         @default(now())
-  deletedAt    DateTime?
+  id         String           @id @default(cuid())
+  name       String
+  category   DocumentCategory @default(OTHER)
+  fileKey    String
+  fileUrl    String
+  fileSize   Int
+  mimeType   String
+  version    Int              @default(1)
+  isLatest   Boolean          @default(true)
+  uploadedAt DateTime         @default(now())
+  deletedAt  DateTime?
 
-  projectId    String
-  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   uploadedById String
-  uploadedBy   User             @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  uploadedBy   User   @relation("DocumentUploader", fields: [uploadedById], references: [id])
 
   // Self-relation: every version after v1 points back to the original document.
-  parentId     String?
-  parent       Document?        @relation("DocumentVersions", fields: [parentId], references: [id], onDelete: Cascade)
-  versions     Document[]       @relation("DocumentVersions")
+  parentId String?
+  parent   Document?  @relation("DocumentVersions", fields: [parentId], references: [id], onDelete: Cascade)
+  versions Document[] @relation("DocumentVersions")
 
   @@index([projectId])
   @@index([projectId, isLatest])
@@ -228,17 +230,17 @@ model Document {
 }
 
 model ClientComment {
-  id          String      @id @default(cuid())
-  content     String
-  type        CommentType @default(FEEDBACK)
-  author      String
-  createdAt   DateTime    @default(now())
-  resolvedAt  DateTime?
+  id         String      @id @default(cuid())
+  content    String
+  type       CommentType @default(FEEDBACK)
+  author     String
+  createdAt  DateTime    @default(now())
+  resolvedAt DateTime?
 
-  projectId   String
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  clientId    String
-  client      Client      @relation(fields: [clientId], references: [id])
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client  @relation(fields: [clientId], references: [id])
 
   @@index([projectId])
   @@index([clientId])
@@ -246,34 +248,34 @@ model ClientComment {
 }
 
 model Payment {
-  id          String    @id @default(cuid())
-  amount      Float
-  date        DateTime
-  reference   String?
-  note        String?
-  createdAt   DateTime  @default(now())
+  id        String   @id @default(cuid())
+  amount    Float
+  date      DateTime
+  reference String?
+  note      String?
+  createdAt DateTime @default(now())
 
-  projectId   String
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId    String
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   recordedById String
-  recordedBy  User      @relation(fields: [recordedById], references: [id])
+  recordedBy   User    @relation(fields: [recordedById], references: [id])
 
   @@index([projectId])
 }
 
 model AssignmentRecord {
-  id          String    @id @default(cuid())
-  reason      String?
-  date        DateTime  @default(now())
+  id     String   @id @default(cuid())
+  reason String?
+  date   DateTime @default(now())
 
   projectId       String
-  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   fromArchitectId String?
-  fromArchitect   User?     @relation("FromArchitect", fields: [fromArchitectId], references: [id])
+  fromArchitect   User?   @relation("FromArchitect", fields: [fromArchitectId], references: [id])
   toArchitectId   String
-  toArchitect     User      @relation("ToArchitect", fields: [toArchitectId], references: [id])
+  toArchitect     User    @relation("ToArchitect", fields: [toArchitectId], references: [id])
   performedById   String
-  performedBy     User      @relation("PerformedByUser", fields: [performedById], references: [id])
+  performedBy     User    @relation("PerformedByUser", fields: [performedById], references: [id])
 
   @@index([projectId])
 }
@@ -286,9 +288,31 @@ model Notification {
   createdAt DateTime         @default(now())
   dedupeKey String?
 
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, read])
   @@unique([userId, dedupeKey])
+  @@index([userId, read])
+}
+
+model ActivityLog {
+  id String @id @default(cuid())
+
+  action     String
+  entityType String
+  entityId   String
+
+  actorId String
+  actor   User   @relation(fields: [actorId], references: [id])
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([actorId])
+  @@index([createdAt])
 }

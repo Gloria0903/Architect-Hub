@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { z } from "zod";
 import { canAccessProject } from "@/lib/rbac";
+import { logActivity } from "@/lib/activity-log";
 
 const Schema = z.object({
   projectId: z.string(),

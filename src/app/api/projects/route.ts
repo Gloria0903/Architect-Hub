@@ -6,6 +6,7 @@ import { Priority } from "@prisma/client";
 import { z } from "zod";
 import { projectAccessWhere, canCreateProjects } from "@/lib/rbac";
 import { generateProjectSheetNo } from "@/lib/project-number";
+import { logActivity } from "@/lib/activity-log";
 
 const CreateProjectSchema = z.object({
   name: z.string().min(2),
@@ -322,6 +323,34 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+
+  // ---------------------------------------------------------
+// Record project creation activity
+// ---------------------------------------------------------
+
+try {
+  await logActivity({
+    action: "PROJECT_CREATED",
+    entityType: "PROJECT",
+    entityId: project.id,
+    actorId: session.user.id,
+    projectId: project.id,
+    metadata: {
+      projectName: project.name,
+      sheetNo: project.sheetNo,
+      architectId: project.architectId,
+      supervisorId: project.supervisorId,
+      clientId: project.clientId,
+    },
+  });
+} catch (error) {
+  // Activity logging failure should not make
+  // an already-created project fail.
+  console.error(
+    "Project activity logging failed:",
+    error
+  );
+}
 
   // ---------------------------------------------------------
   // Notify project creator
