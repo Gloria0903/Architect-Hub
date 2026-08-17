@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { Input, Select, Textarea, Field, FormRow } from "@/components/ui/form-field";
 import { useStore, formatKsh, formatFileSize, commentTypeLabel, priorityLabel, ProjectStatus, Priority } from "@/store/app-store";
 import Link from "next/link";
-import { Repeat, Upload, FileText, MessageSquare, Wallet, History, CheckCircle, Pencil, Trash2, Download, File as FileIcon, ArrowRightLeft } from "lucide-react";
+import { Repeat, Upload, FileText, MessageSquare, Wallet, History, CheckCircle, Pencil, Trash2, Download, File as FileIcon, ArrowRightLeft, Eye, EyeOff, Archive } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 
 const tabs = [
@@ -28,7 +28,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const {
     projects, staff, clients, logs, comments, payments, documents,
     addPayment, reassignProject, resolveComment, updateProject, removeProject,
-    uploadDocument, removeDocument,
+    uploadDocument, removeDocument, toggleDocumentVisibility,
   } = useStore();
 
   const projectData = projects.find(p => p.id === id);
@@ -83,8 +83,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     setEditOpen(false);
   }
 
-  async function handleDeleteProject() {
-    if (!confirm(`Delete project "${project.name}"? This removes all its logs, documents, comments and payments too.`)) return;
+  async function handleArchiveProject() {
+    if (!confirm(`Archive project "${project.name}"? It'll be hidden from the active projects list, but its logs, documents, comments and payments are kept and can be restored later.`)) return;
     await removeProject(project.id);
     router.push("/projects");
   }
@@ -140,8 +140,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </button>
             )}
             {isAdmin && (
-              <button onClick={handleDeleteProject} className="flex items-center gap-1.5 border border-line text-brick rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-brick-bg">
-                <Trash2 size={14} />Delete
+              <button onClick={handleArchiveProject} className="flex items-center gap-1.5 border border-line text-brick rounded-md px-3 py-1.5 text-[12px] font-medium hover:bg-brick-bg">
+                <Archive size={14} />Archive
               </button>
             )}
           </div>
@@ -281,6 +281,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        onClick={() => toggleDocumentVisibility(d.id, !d.clientVisible)}
+                        className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-[3px] font-medium ${d.clientVisible ? "bg-moss-bg text-moss" : "text-muted hover:text-ink"}`}
+                        title={d.clientVisible ? "Visible to client in the Client Portal — click to hide" : "Not visible to client — click to share via Client Portal"}
+                      >
+                        {d.clientVisible ? <Eye size={13} /> : <EyeOff size={13} />}
+                        {d.clientVisible ? "Client can see" : "Not shared"}
+                      </button>
                       <a href={d.fileUrl} download={d.name} className="text-blueprint hover:text-blueprint/70" title="Download"><Download size={15} /></a>
                       <button onClick={() => handleDeleteDoc(d.id, d.name)} className="text-muted hover:text-brick" title="Delete"><Trash2 size={15} /></button>
                     </div>

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { LayoutGrid, Folder, ClipboardList, Files, Wallet, MessageCircle, History, Users, Settings, Repeat, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/store/app-store";
+import { useFirmName } from "@/lib/use-firm-name";
 
 const overview = [{ href: "/dashboard", label: "Dashboard", icon: LayoutGrid }];
 const operations = [
@@ -42,6 +43,7 @@ export function Sidebar() {
   const { notifications, comments, logs } = useStore();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
+  const firmName = useFirmName();
   const unreadNotifs = notifications.filter(n => !n.read).length;
   const unresolvedComments = comments.filter(c => !c.resolvedAt).length;
   const today = new Date().toISOString().split("T")[0];
@@ -54,7 +56,7 @@ export function Sidebar() {
           <path d="M2 16 L9 2 L16 16 Z" fill="none" stroke="#2451C4" strokeWidth="1.4" />
           <line x1="2" y1="16" x2="16" y2="16" stroke="#2451C4" strokeWidth="1.4" />
         </svg>
-        Architect Hub
+        {firmName}
       </div>
       <SectionLabel>OVERVIEW</SectionLabel>
       {overview.map(i => <NavItem key={i.href} {...i} badge={i.href === "/dashboard" ? unreadNotifs : undefined} />)}

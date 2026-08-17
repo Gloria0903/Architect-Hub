@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { Priority } from "@prisma/client";
 import { z } from "zod";
-import { projectAccessWhere, canCreateProjects } from "@/lib/rbac";
+import { projectAccessWhere, canCreateProjects, isAdmin } from "@/lib/rbac";
 import { generateProjectSheetNo } from "@/lib/project-number";
 import { logActivity } from "@/lib/activity-log";
 
@@ -26,7 +26,7 @@ const CreateProjectSchema = z.object({
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
 
   if (!session) {
@@ -36,13 +36,19 @@ export async function GET() {
     );
   }
 
+  // Admin-only "view archived" mode. Regular architects never get this
+  // branch, same access rule as archiving/unarchiving itself.
+  const wantsArchived = req.nextUrl.searchParams.get("archived") === "true";
+  if (wantsArchived && !isAdmin(session)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const projects = await prisma.project.findMany({
     where: {
       AND: [
         projectAccessWhere(session),
         {
-          // Do not show archived projects in the normal project list
-          archivedAt: null,
+          archivedAt: wantsArchived ? { not: null } : null,
         },
       ],
     },

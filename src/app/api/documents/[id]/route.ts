@@ -13,7 +13,10 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     where: { id },
     include: { project: true },
   });
-  if (!document) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!document || document.deletedAt) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // Client Portal sessions never reach this route — middleware.ts routes
+  // them to /api/client-portal/documents/[id] instead, which enforces the
+  // clientVisible flag. This route stays staff-only.
   if (!canAccessProject(session, document.project)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -32,6 +35,37 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       "Content-Length": String(document.fileSize),
     },
   });
+}
+
+/**
+ * Only field this route supports changing today is clientVisible — the
+ * flag that decides whether a document shows up in the Client Portal (see
+ * /api/client-portal/documents/[id] and /api/client-portal/projects/[id]).
+ * Anyone who can access the project can toggle it, same as who can upload
+ * or delete a document — this isn't a more sensitive action than those.
+ */
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const document = await prisma.document.findUnique({ where: { id }, include: { project: true } });
+  if (!document || document.deletedAt) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!canAccessProject(session, document.project)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => null);
+  if (typeof body?.clientVisible !== "boolean") {
+    return NextResponse.json({ error: "clientVisible (boolean) is required" }, { status: 400 });
+  }
+
+  const updated = await prisma.document.update({
+    where: { id },
+    data: { clientVisible: body.clientVisible },
+  });
+
+  return NextResponse.json(updated);
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {

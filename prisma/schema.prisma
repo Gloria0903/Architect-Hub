@@ -123,10 +123,19 @@ model Client {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Client Portal login — optional. A client only gets portal access once
+  // an admin sets a password and flips portalEnabled on (see /clients UI).
+  // No email means no portal login is possible, since email is the login
+  // identifier — that's enforced at the API layer, not the schema.
+  passwordHash      String?
+  portalEnabled     Boolean   @default(false)
+  lastPortalLoginAt DateTime?
+
   projects Project[]
   comments ClientComment[]
 
   @@index([name])
+  @@index([email])
 }
 
 model Project {
@@ -210,6 +219,10 @@ model Document {
   mimeType   String
   version    Int              @default(1)
   isLatest   Boolean          @default(true)
+  // Whether this document has been approved to show in the Client Portal.
+  // Staff must explicitly flag a document client-visible — nothing is
+  // exposed to a client by default just because it's on the project.
+  clientVisible Boolean       @default(false)
   uploadedAt DateTime         @default(now())
   deletedAt  DateTime?
 
@@ -234,6 +247,9 @@ model ClientComment {
   content    String
   type       CommentType @default(FEEDBACK)
   author     String
+  // True when the client posted this themselves from the Client Portal,
+  // as opposed to staff logging a comment/call on the client's behalf.
+  viaPortal  Boolean     @default(false)
   createdAt  DateTime    @default(now())
   resolvedAt DateTime?
 
@@ -278,6 +294,15 @@ model AssignmentRecord {
   performedBy     User    @relation("PerformedByUser", fields: [performedById], references: [id])
 
   @@index([projectId])
+}
+
+// Singleton row (id is always "singleton") holding firm-wide branding.
+// Read on every page load (login, sidebar) so rebranding is a one-row
+// update instead of an env var + redeploy.
+model FirmSettings {
+  id        String   @id @default("singleton")
+  firmName  String   @default("Architect Hub")
+  updatedAt DateTime @updatedAt
 }
 
 model Notification {

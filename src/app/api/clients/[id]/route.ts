@@ -34,7 +34,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     },
   });
 
-  return NextResponse.json(client);
+  const { passwordHash: _passwordHash, ...safeClient } = client;
+  return NextResponse.json(safeClient);
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {

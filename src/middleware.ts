@@ -80,7 +80,16 @@ export default auth((req) => {
     }
   }
 
-  const publicPaths = ["/login", "/forgot-password", "/reset-password", "/api/auth"];
+  const publicPaths = [
+    "/login",
+    "/forgot-password",
+    "/reset-password",
+    "/api/auth",
+    // Firm branding (name) shown on the unauthenticated login page. GET is
+    // unauthenticated by design; PATCH still enforces its own auth + admin
+    // check inside the route handler, since this bypasses the session gate.
+    "/api/settings/firm",
+  ];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
   if (!req.auth && !isPublic) {
@@ -97,7 +106,29 @@ export default auth((req) => {
   }
 
   if (req.auth && pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    const home = req.auth.user.role === "CLIENT" ? "/client-portal" : "/dashboard";
+    return NextResponse.redirect(new URL(home, req.url));
+  }
+
+  // Client Portal and staff app are separate worlds: a client session must
+  // never reach staff pages/APIs (client-comms, staff, finance, etc. all
+  // expose other clients' data), and a staff session has no business in
+  // the portal. Route handlers still re-check this — see
+  // src/lib/client-portal-auth.ts — this is defense in depth, not the
+  // only gate.
+  if (req.auth) {
+    const isClient = req.auth.user.role === "CLIENT";
+    const isPortalArea = pathname.startsWith("/client-portal") || pathname.startsWith("/api/client-portal");
+    if (isClient && !isPortalArea && !isPublic) {
+      return isApiRoute
+        ? NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        : NextResponse.redirect(new URL("/client-portal", req.url));
+    }
+    if (!isClient && isPortalArea) {
+      return isApiRoute
+        ? NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        : NextResponse.redirect(new URL("/dashboard", req.url));
+    }
   }
 
   const res = NextResponse.next();
