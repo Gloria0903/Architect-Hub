@@ -7,8 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Enums ────────────────────────────────────────────────────────────────────
-
 enum Role {
   ADMIN
   ARCHITECT
@@ -41,44 +39,83 @@ enum NotificationType {
   ERROR
 }
 
-// ─── Models ───────────────────────────────────────────────────────────────────
+enum ProjectLifecycleEventType {
+  ARCHIVED
+  RESTORED
+}
+
+enum DocumentCategory {
+  DRAWING
+  BOQ
+  CONTRACT
+  SITE_REPORT
+  PRESENTATION
+  OTHER
+}
 
 model User {
-  id                  String    @id @default(cuid())
-  name                String
-  email               String    @unique
-  password            String
-  role                Role      @default(ARCHITECT)
-  phone               String?
-  department          String?
-  initials            String
-  avatarUrl           String?
-  avatarKey           String?
-  mfaEnabled          Boolean   @default(false)
-  mfaSecret           String?
-  joinDate            DateTime  @default(now())
-  lastLoginAt         DateTime?
-  isActive            Boolean   @default(true)
-  mustResetPassword   Boolean   @default(false)
+  id         String  @id @default(cuid())
+  name       String
+  email      String  @unique
+  password   String
+  role       Role    @default(ARCHITECT)
+  phone      String?
+  department String?
+  initials   String
+  avatarUrl  String?
+  avatarKey  String?
+
+  mfaEnabled Boolean @default(false)
+  mfaSecret  String?
+
+  joinDate    DateTime  @default(now())
+  lastLoginAt DateTime?
+
+  isActive          Boolean @default(true)
+  mustResetPassword Boolean @default(false)
+
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
-  passwordChangedAt   DateTime  @default(now())
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
 
-  // Relations
-  assignedProjects    Project[]            @relation("ArchitectProjects")
-  supervisedProjects  Project[]            @relation("SupervisorProjects")
-  dailyLogs           DailyLog[]
-  assignmentsMade     AssignmentRecord[]   @relation("PerformedByUser")
-  fromAssignments     AssignmentRecord[]   @relation("FromArchitect")
-  toAssignments       AssignmentRecord[]   @relation("ToArchitect")
-  notifications       Notification[]
-  payments            Payment[]
-  loginEvents         LoginEvent[]
-  documentsUploaded   Document[]           @relation("DocumentUploader")
+  passwordChangedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Project relationships
+  assignedProjects   Project[] @relation("ArchitectProjects")
+  supervisedProjects Project[] @relation("SupervisorProjects")
+  archivedProjects   Project[] @relation("ArchivedProjects")
+  restoredProjects   Project[] @relation("RestoredProjects")
+
+  // Daily logs
+  dailyLogs DailyLog[]
+
+  // Assignment history
+  assignmentsMade AssignmentRecord[] @relation("PerformedByUser")
+  fromAssignments AssignmentRecord[] @relation("FromArchitect")
+  toAssignments   AssignmentRecord[] @relation("ToArchitect")
+
+  // Notifications
+  notifications Notification[]
+
+  // Payments
+  payments Payment[]
+
+  // Login/security
+  loginEvents LoginEvent[]
+
+  // Documents
+  documentsUploaded Document[] @relation("DocumentUploader")
+
+  // Password reset
   passwordResetTokens PasswordResetToken[]
-  activityLogs        ActivityLog[]
+
+  // Activity
+  activityLogs ActivityLog[]
+
+  // Lifecycle events
+  lifecycleEvents ProjectLifecycleEvent[] @relation("ProjectLifecycleEvents")
 
   @@index([email])
   @@index([role])
@@ -114,22 +151,20 @@ model LoginEvent {
 }
 
 model Client {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   name          String
   contactPerson String
   email         String?
   phone         String?
   address       String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
 
-  // Client Portal login — optional. A client only gets portal access once
-  // an admin sets a password and flips portalEnabled on (see /clients UI).
-  // No email means no portal login is possible, since email is the login
-  // identifier — that's enforced at the API layer, not the schema.
+  // Client Portal
   passwordHash      String?
   portalEnabled     Boolean   @default(false)
   lastPortalLoginAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   projects Project[]
   comments ClientComment[]
@@ -139,60 +174,105 @@ model Client {
 }
 
 model Project {
-  id             String        @id @default(cuid())
-  sheetNo        String        @unique
-  name           String
-  description    String?
-  location       String
-  status         ProjectStatus @default(ON_TRACK)
-  progress       Int           @default(0)
-  priority       Priority      @default(MEDIUM)
+  id          String  @id @default(cuid())
+  sheetNo     String  @unique
+  name        String
+  description String?
+  location    String
+
+  status   ProjectStatus @default(ON_TRACK)
+  progress Int           @default(0)
+  priority Priority      @default(MEDIUM)
+
   startDate      DateTime
   dueDate        DateTime
   completionDate DateTime?
-  budget         Float         @default(0)
-  invoiced       Float         @default(0)
-  paid           Float         @default(0)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  archivedAt     DateTime?
 
-  // Relations
-  clientId     String
-  client       Client  @relation(fields: [clientId], references: [id])
-  architectId  String?
-  architect    User?   @relation("ArchitectProjects", fields: [architectId], references: [id])
+  budget   Float @default(0)
+  invoiced Float @default(0)
+  paid     Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Project lifecycle
+  archivedAt    DateTime?
+  archiveReason String?
+
+  archivedById String?
+  archivedBy   User?   @relation("ArchivedProjects", fields: [archivedById], references: [id], onDelete: SetNull)
+
+  restoredAt   DateTime?
+  restoredById String?
+  restoredBy   User?     @relation("RestoredProjects", fields: [restoredById], references: [id], onDelete: SetNull)
+
+  // Client
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+
+  // Architect
+  architectId String?
+  architect   User?   @relation("ArchitectProjects", fields: [architectId], references: [id])
+
+  // Supervisor
   supervisorId String?
   supervisor   User?   @relation("SupervisorProjects", fields: [supervisorId], references: [id])
 
+  // Project data
   dailyLogs         DailyLog[]
   documents         Document[]
   comments          ClientComment[]
   payments          Payment[]
   assignmentHistory AssignmentRecord[]
+  lifecycleEvents   ProjectLifecycleEvent[]
   activityLogs      ActivityLog[]
 
   @@index([status])
   @@index([architectId])
+  @@index([supervisorId])
   @@index([clientId])
   @@index([sheetNo])
   @@index([archivedAt])
+  @@index([archivedById])
+  @@index([restoredById])
 }
 
-model DailyLog {
-  id            String   @id @default(cuid())
-  date          DateTime
-  workCompleted String
-  challenges    String   @default("")
-  pendingWork   String   @default("")
-  nextActions   String   @default("")
-  progress      Int
-  submittedAt   DateTime @default(now())
+model ProjectLifecycleEvent {
+  id        String                    @id @default(cuid())
+  type      ProjectLifecycleEventType
+  reason    String?
+  createdAt DateTime                  @default(now())
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  authorId  String
-  author    User    @relation(fields: [authorId], references: [id])
+
+  performedById String
+  performedBy   User   @relation("ProjectLifecycleEvents", fields: [performedById], references: [id], onDelete: Restrict)
+
+  @@index([projectId])
+  @@index([performedById])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model DailyLog {
+  id   String   @id @default(cuid())
+  date DateTime
+
+  workCompleted String
+  challenges    String @default("")
+  pendingWork   String @default("")
+  nextActions   String @default("")
+
+  progress Int
+
+  submittedAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
 
   @@unique([projectId, authorId, date])
   @@index([projectId])
@@ -200,30 +280,22 @@ model DailyLog {
   @@index([date])
 }
 
-enum DocumentCategory {
-  DRAWING
-  BOQ
-  CONTRACT
-  SITE_REPORT
-  PRESENTATION
-  OTHER
-}
-
 model Document {
-  id         String           @id @default(cuid())
-  name       String
-  category   DocumentCategory @default(OTHER)
-  fileKey    String
-  fileUrl    String
-  fileSize   Int
-  mimeType   String
-  version    Int              @default(1)
-  isLatest   Boolean          @default(true)
-  // Whether this document has been approved to show in the Client Portal.
-  // Staff must explicitly flag a document client-visible — nothing is
-  // exposed to a client by default just because it's on the project.
-  clientVisible Boolean       @default(false)
-  uploadedAt DateTime         @default(now())
+  id       String           @id @default(cuid())
+  name     String
+  category DocumentCategory @default(OTHER)
+
+  fileKey  String
+  fileUrl  String
+  fileSize Int
+  mimeType String
+
+  version  Int     @default(1)
+  isLatest Boolean @default(true)
+
+  clientVisible Boolean @default(false)
+
+  uploadedAt DateTime  @default(now())
   deletedAt  DateTime?
 
   projectId String
@@ -232,9 +304,10 @@ model Document {
   uploadedById String
   uploadedBy   User   @relation("DocumentUploader", fields: [uploadedById], references: [id])
 
-  // Self-relation: every version after v1 points back to the original document.
+  // Document versioning
   parentId String?
-  parent   Document?  @relation("DocumentVersions", fields: [parentId], references: [id], onDelete: Cascade)
+  parent   Document? @relation("DocumentVersions", fields: [parentId], references: [id], onDelete: Cascade)
+
   versions Document[] @relation("DocumentVersions")
 
   @@index([projectId])
@@ -243,20 +316,22 @@ model Document {
 }
 
 model ClientComment {
-  id         String      @id @default(cuid())
-  content    String
-  type       CommentType @default(FEEDBACK)
-  author     String
-  // True when the client posted this themselves from the Client Portal,
-  // as opposed to staff logging a comment/call on the client's behalf.
-  viaPortal  Boolean     @default(false)
-  createdAt  DateTime    @default(now())
+  id      String      @id @default(cuid())
+  content String
+  type    CommentType @default(FEEDBACK)
+
+  author String
+
+  viaPortal Boolean @default(false)
+
+  createdAt  DateTime  @default(now())
   resolvedAt DateTime?
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  clientId  String
-  client    Client  @relation(fields: [clientId], references: [id])
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
 
   @@index([projectId])
   @@index([clientId])
@@ -269,12 +344,14 @@ model Payment {
   date      DateTime
   reference String?
   note      String?
+
   createdAt DateTime @default(now())
 
-  projectId    String
-  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   recordedById String
-  recordedBy   User    @relation(fields: [recordedById], references: [id])
+  recordedBy   User   @relation(fields: [recordedById], references: [id])
 
   @@index([projectId])
 }
@@ -284,21 +361,21 @@ model AssignmentRecord {
   reason String?
   date   DateTime @default(now())
 
-  projectId       String
-  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   fromArchitectId String?
   fromArchitect   User?   @relation("FromArchitect", fields: [fromArchitectId], references: [id])
-  toArchitectId   String
-  toArchitect     User    @relation("ToArchitect", fields: [toArchitectId], references: [id])
-  performedById   String
-  performedBy     User    @relation("PerformedByUser", fields: [performedById], references: [id])
+
+  toArchitectId String
+  toArchitect   User   @relation("ToArchitect", fields: [toArchitectId], references: [id])
+
+  performedById String
+  performedBy   User   @relation("PerformedByUser", fields: [performedById], references: [id])
 
   @@index([projectId])
 }
 
-// Singleton row (id is always "singleton") holding firm-wide branding.
-// Read on every page load (login, sidebar) so rebranding is a one-row
-// update instead of an env var + redeploy.
 model FirmSettings {
   id        String   @id @default("singleton")
   firmName  String   @default("Architect Hub")
@@ -306,11 +383,13 @@ model FirmSettings {
 }
 
 model Notification {
-  id        String           @id @default(cuid())
-  message   String
-  type      NotificationType @default(INFO)
-  read      Boolean          @default(false)
-  createdAt DateTime         @default(now())
+  id      String           @id @default(cuid())
+  message String
+  type    NotificationType @default(INFO)
+  read    Boolean          @default(false)
+
+  createdAt DateTime @default(now())
+
   dedupeKey String?
 
   userId String

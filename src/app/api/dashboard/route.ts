@@ -64,7 +64,19 @@ export async function GET() {
 
   // Financial aggregates
   const totalRevenue = projects.reduce((s: number, p: { paid: number }) => s + p.paid, 0);
-  const totalOutstanding = projects.reduce((s: number, p: { invoiced: number; paid: number }) => s + (p.invoiced - p.paid), 0);
+  const totalOutstanding = projects.reduce(
+  (
+    sum: number,
+    project: { budget: number; paid: number }
+  ) =>
+    sum +
+    Math.max(
+      Number(project.budget || 0) -
+        Number(project.paid || 0),
+      0
+    ),
+  0
+);
 
   // Project health
   const onTrack = projects.filter((p: { status: string }) => p.status === "ON_TRACK").length;
