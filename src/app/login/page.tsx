@@ -5,9 +5,11 @@ import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { useFirmName } from "@/lib/use-firm-name";
 
 function LoginContent() {
   const router = useRouter();
+  const firmName = useFirmName();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
@@ -80,7 +82,7 @@ function LoginContent() {
             <path d="M2 16 L9 2 L16 16 Z" fill="none" stroke="#2451C4" strokeWidth="1.4" />
             <line x1="2" y1="16" x2="16" y2="16" stroke="#2451C4" strokeWidth="1.4" />
           </svg>
-          <span className="font-display font-bold text-[19px] text-ink">Architect Hub</span>
+          <span className="font-display font-bold text-[19px] text-ink">{firmName}</span>
         </div>
 
         <div className="bg-surface border border-line rounded-card p-5">

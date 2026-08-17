@@ -2,6 +2,7 @@ import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
+import type { AppRole } from "@/types/next-auth";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
@@ -26,6 +27,38 @@ async function logLoginEvent(userId: string | null, success: boolean, reason: st
   }
 }
 
+/**
+ * Client Portal login. Deliberately a separate, simpler path from staff
+ * auth above: no MFA, no failed-attempt lockout counters (Client has none
+ * of those columns — see prisma/schema.prisma), and no LoginEvent audit
+ * row, since that table's userId FK points at User, not Client. A client
+ * only gets in if an admin has both set a password AND flipped
+ * `portalEnabled` on for them (see /clients UI + /api/clients/[id]/portal).
+ */
+async function authorizeClientPortal(email: string, password: string) {
+  const client = await prisma.client.findFirst({ where: { email } });
+  if (!client || !client.portalEnabled || !client.passwordHash) return null;
+
+  const passwordValid = await bcrypt.compare(password, client.passwordHash);
+  if (!passwordValid) return null;
+
+  await prisma.client.update({ where: { id: client.id }, data: { lastPortalLoginAt: new Date() } });
+
+  return {
+    id: client.id,
+    name: client.contactPerson,
+    email: client.email,
+    role: "CLIENT" as const,
+    initials: client.contactPerson
+      .split(" ")
+      .map((p: string) => p[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase(),
+    clientId: client.id,
+  };
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
   session: { strategy: "jwt", maxAge: DEFAULT_SESSION_SECONDS },
@@ -36,6 +69,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id as string;
         token.role = user.role;
         token.initials = user.initials;
+        token.clientId = (user as { clientId?: string }).clientId;
         const remember = (user as { remember?: boolean }).remember;
         if (remember) {
           token.exp = Math.floor(Date.now() / 1000) + REMEMBER_ME_SESSION_SECONDS;
@@ -46,8 +80,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id as string;
-        session.user.role = token.role as "ADMIN" | "ARCHITECT";
+        session.user.role = token.role as AppRole;
         session.user.initials = token.initials as string;
+        session.user.clientId = token.clientId as string | undefined;
       }
       return session;
     },
@@ -68,8 +103,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user) {
-          await logLoginEvent(null, false, `unknown_email:${email}`);
-          return null;
+          // No staff account with this email — check the Client Portal
+          // before giving up. Kept as a fully separate code path (own
+          // password check, no MFA, no lockout counters) so client-portal
+          // access can never be mistaken for a staff account or vice versa.
+          return authorizeClientPortal(email, password);
         }
 
         // Account lockout check

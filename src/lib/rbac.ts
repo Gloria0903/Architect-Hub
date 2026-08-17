@@ -6,9 +6,10 @@ import type { Prisma } from "@prisma/client";
  *
  * Rules (two roles only):
  *  - ADMIN: full access to everything — user management, client management,
- *    project creation/reassignment, payments, all reports.
+ *    firm settings, project creation/reassignment, payments, all reports.
  *  - ARCHITECT: scoped strictly to projects they are the architect OR
- *    supervisor on. Cannot manage staff, clients, payments, or reassignment.
+ *    supervisor on. Cannot manage staff, clients, payments, firm settings,
+ *    or reassignment.
  *
  * These functions are the single source of truth for authorization checks.
  * Every API route must call the relevant helper server-side — never rely on
@@ -25,6 +26,10 @@ export function canManageStaff(session: Session): boolean {
 
 export function canManageClients(session: Session): boolean {
   return session.user.role === "ADMIN";
+}
+
+export function canManageFirmSettings(session: Session): boolean {
+  return isAdmin(session);
 }
 
 export function canCreateProjects(session: Session): boolean {

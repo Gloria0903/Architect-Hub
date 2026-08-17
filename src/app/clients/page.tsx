@@ -5,8 +5,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Input, Field, FormRow } from "@/components/ui/form-field";
-import { useStore } from "@/store/app-store";
-import { Plus, Building2, Mail, Phone, Pencil, Trash2 } from "lucide-react";
+import { useStore, Client } from "@/store/app-store";
+import { Plus, Building2, Mail, Phone, Pencil, Trash2, KeyRound, Copy, Check } from "lucide-react";
 
 const emptyForm = { name: "", contactPerson: "", email: "", phone: "", address: "" };
 
@@ -103,6 +103,7 @@ export default function ClientsPage() {
                   <div className="flex items-center gap-2 text-muted"><Mail size={12} />{client.email || "—"}</div>
                   <div className="flex items-center gap-2 text-muted"><Phone size={12} />{client.phone || "—"}</div>
                 </div>
+                {isAdmin && <ClientPortalAccess client={client} />}
                 <div className="border-t border-line pt-3">
                   <div className="text-[11px] text-muted mb-2">Projects ({clientProjects.length})</div>
                   {clientProjects.length === 0
@@ -166,5 +167,83 @@ export default function ClientsPage() {
         </Modal>
       </div>
     </AppShell>
+  );
+}
+
+/**
+ * Admin-only control on each client card: flip portal access on/off and
+ * (re)issue a login password. Deliberately its own fetch, not routed
+ * through the central store — this is a narrow, admin-only side action on
+ * a record the store already owns, not a shape the rest of the app reads.
+ */
+function ClientPortalAccess({ client }: { client: Client }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [enabled, setEnabled] = useState(Boolean(client.portalEnabled));
+
+  async function callPortalApi(body: { portalEnabled: boolean; password?: string }) {
+    setError("");
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/clients/${client.id}/portal`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update portal access");
+      setEnabled(data.portalEnabled);
+      if (data.temporaryPassword) setTempPassword(data.temporaryPassword);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleCopy() {
+    if (!tempPassword) return;
+    navigator.clipboard.writeText(tempPassword);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <div className="border-t border-line pt-3 mb-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-[11px] text-muted"><KeyRound size={12} />Client Portal</div>
+        <button
+          disabled={busy || (!enabled && !client.email)}
+          onClick={() => callPortalApi({ portalEnabled: !enabled })}
+          title={!client.email ? "Add a client email first" : undefined}
+          className={`text-[10.5px] px-2 py-0.5 rounded-[3px] font-medium disabled:opacity-40 ${enabled ? "bg-moss-bg text-moss" : "bg-vellum text-muted border border-line"}`}
+        >
+          {enabled ? "Enabled" : "Disabled"}
+        </button>
+      </div>
+      {enabled && (
+        <button
+          disabled={busy}
+          onClick={() => callPortalApi({ portalEnabled: true, password: "" })}
+          className="text-[11px] text-blueprint mt-1.5 hover:underline disabled:opacity-40"
+        >
+          Issue new portal password
+        </button>
+      )}
+      {error && <p className="text-brick text-[11px] mt-1">{error}</p>}
+      {tempPassword && (
+        <div className="mt-2 bg-vellum border border-line rounded-md p-2 flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] text-muted">Share this with the client securely — shown once:</div>
+            <div className="font-mono text-[12px] text-ink">{tempPassword}</div>
+          </div>
+          <button onClick={handleCopy} className="text-muted hover:text-blueprint shrink-0" title="Copy">
+            {copied ? <Check size={14} className="text-moss" /> : <Copy size={14} />}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

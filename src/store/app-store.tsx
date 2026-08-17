@@ -35,6 +35,8 @@ export interface Client {
   address?: string;
   createdAt: string;
   projects?: Project[];
+  portalEnabled?: boolean;
+  lastPortalLoginAt?: string;
 }
 
 export interface Project {
@@ -99,6 +101,7 @@ export interface ClientComment {
   author: string;
   content: string;
   type: CommentType;
+  viaPortal?: boolean;
   createdAt: string;
   resolvedAt?: string;
 }
@@ -134,6 +137,7 @@ export interface Document {
   projectId: string;
   project?: { id: string; name: string; sheetNo: string };
   uploadedById: string;
+  clientVisible?: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -229,6 +233,7 @@ interface AppActions {
   markNotificationRead: (id: string) => Promise<void>;
   uploadDocument: (projectId: string, file: File) => Promise<void>;
   removeDocument: (id: string) => Promise<void>;
+  toggleDocumentVisibility: (id: string, clientVisible: boolean) => Promise<void>;
   uploadAvatar: (file: File) => Promise<void>;
   removeAvatar: () => Promise<void>;
 }
@@ -236,7 +241,12 @@ interface AppActions {
 const Ctx = createContext<(AppState & AppActions) | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { status } = useSession();
+  const { status, data: session } = useSession();
+  // Client Portal sessions never have access to the staff data endpoints
+  // below (see middleware.ts) — the portal pages fetch /api/client-portal/*
+  // directly instead. Treat a client session the same as "unauthenticated"
+  // here so this provider doesn't spend the whole session retrying 403s.
+  const isStaffSession = status === "authenticated" && session?.user?.role !== "CLIENT";
   const [state, setState] = useState<AppState>({
     staff: [], clients: [], projects: [], logs: [],
     comments: [], payments: [], notifications: [], documents: [],
@@ -266,23 +276,23 @@ const notifications = notificationResponse.notifications ?? [];
   }, []);
 
   useEffect(() => {
-  if (status === "authenticated") {
+  if (isStaffSession) {
     refresh();
   }
 
-  if (status === "unauthenticated") {
+  if (status === "unauthenticated" || (status === "authenticated" && !isStaffSession)) {
     setState((s) => ({
       ...s,
       loading: false,
     }));
   }
-}, [status, refresh]);
+}, [status, isStaffSession, refresh]);
 
   // Keep data fresh when other users change it (new logs, payments, comments, etc.)
   // without the current user having to trigger a mutation of their own: poll
   // periodically, and refetch immediately whenever the tab regains focus.
   useEffect(() => {
-    if (status !== "authenticated") return;
+    if (!isStaffSession) return;
 
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") refresh();
@@ -297,7 +307,8 @@ const notifications = notificationResponse.notifications ?? [];
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
     };
-  }, [status, refresh]);
+  }, [status, isStaffSession, refresh]);
+
   const addStaff = useCallback(async (data: Parameters<AppActions["addStaff"]>[0]) => {
     const result = await apiFetch<{ temporaryPassword?: string }>("/api/staff", { method: "POST", body: JSON.stringify({ ...data, role: data.role.toUpperCase() }) });
     await refresh();
@@ -392,6 +403,15 @@ const notifications = notificationResponse.notifications ?? [];
     await refresh();
   }, [refresh]);
 
+  const toggleDocumentVisibility = useCallback(async (id: string, clientVisible: boolean) => {
+    await apiFetch(`/api/documents/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientVisible }),
+    });
+    await refresh();
+  }, [refresh]);
+
   const uploadAvatar = useCallback(async (file: File) => {
     const form = new FormData();
     form.append("file", file);
@@ -415,7 +435,7 @@ const notifications = notificationResponse.notifications ?? [];
       addClient, updateClient, removeClient,
       addProject, updateProject, removeProject, reassignProject,
       addLog, addComment, resolveComment, addPayment, markNotificationRead,
-      uploadDocument, removeDocument, uploadAvatar, removeAvatar,
+      uploadDocument, removeDocument, toggleDocumentVisibility, uploadAvatar, removeAvatar,
     }}>
       {children}
     </Ctx.Provider>

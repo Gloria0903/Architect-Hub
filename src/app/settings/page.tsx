@@ -7,11 +7,13 @@ import { Input, Field, FormRow } from "@/components/ui/form-field";
 import { useStore, roleLabel, Role } from "@/store/app-store";
 import { CheckCircle, Camera, Trash2 } from "lucide-react";
 import { MfaSettingsCard } from "@/components/settings/mfa-card";
+import { FirmSettingsCard } from "@/components/settings/firm-settings-card";
 import { Avatar } from "@/components/ui/avatar";
 
 export default function SettingsPage() {
   const { staff, updateStaff, uploadAvatar, removeAvatar } = useStore();
   const { data: session, update } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
   const me = staff.find(s => s.id === session?.user?.id);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -135,6 +137,8 @@ export default function SettingsPage() {
           </Card>
 
           <MfaSettingsCard />
+
+          {isAdmin && <FirmSettingsCard />}
 
           <Card className="p-4">
             <div className="font-medium text-ink text-[13px] mb-3">Notifications</div>

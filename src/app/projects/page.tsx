@@ -8,7 +8,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Modal } from "@/components/ui/modal";
 import { Input, Select, Textarea, Field, FormRow } from "@/components/ui/form-field";
 import { useStore, formatKsh, ProjectStatus, Priority } from "@/store/app-store";
-import { Plus, Repeat, Eye, Trash2 } from "lucide-react";
+import { Plus, Repeat, Eye, Trash2, Archive } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 
 type Filter = ProjectStatus | "all";
@@ -62,8 +62,8 @@ export default function ProjectsPage() {
     setReassignTarget(null); setReassignTo(""); setReassignReason("");
   }
 
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete project "${name}"? This removes all its logs, documents, comments and payments too.`)) return;
+  async function handleArchive(id: string, name: string) {
+    if (!confirm(`Archive project "${name}"? It'll be hidden from this list, but its data is kept and can be restored later.`)) return;
     await removeProject(id);
   }
 
@@ -83,11 +83,18 @@ export default function ProjectsPage() {
             <h1 className="font-display font-bold text-[20px] text-ink">Projects</h1>
             <p className="text-muted text-[12px] mt-0.5">{projects.length} {isAdmin ? "projects" : "projects assigned to you"} — click a project to view full details</p>
           </div>
-          {canCreate && (
-            <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90">
-              <Plus size={15} />New project
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Link href="/projects/archived" className="flex items-center gap-1.5 border border-line text-muted rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:text-ink hover:border-ink">
+                <Archive size={15} />Archived
+              </Link>
+            )}
+            {canCreate && (
+              <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90">
+                <Plus size={15} />New project
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-1.5 mb-4 flex-wrap">
@@ -149,7 +156,7 @@ export default function ProjectsPage() {
                           <button onClick={() => setReassignTarget(p.id)} className="p-1 text-muted hover:text-brick transition-colors" title="Reassign"><Repeat size={14} /></button>
                         )}
                         {isAdmin && (
-                          <button onClick={() => handleDelete(p.id, p.name)} className="p-1 text-muted hover:text-brick transition-colors" title="Delete"><Trash2 size={14} /></button>
+                          <button onClick={() => handleArchive(p.id, p.name)} className="p-1 text-muted hover:text-brick transition-colors" title="Archive"><Trash2 size={14} /></button>
                         )}
                       </div>
                     </td>

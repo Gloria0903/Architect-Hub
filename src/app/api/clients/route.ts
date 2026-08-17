@@ -39,7 +39,12 @@ export async function GET() {
     orderBy: { name: "asc" },
   });
 
-  return NextResponse.json(clients);
+  // `include` above pulls in every scalar column by default — that would
+  // otherwise ship passwordHash (a bcrypt hash, still sensitive) to every
+  // caller, including non-admin architects. Strip it here rather than
+  // fighting Prisma's include/select merge semantics.
+  const safeClients = clients.map(({ passwordHash: _passwordHash, ...rest }: (typeof clients)[number]) => rest);
+  return NextResponse.json(safeClients);
 }
 
 export async function POST(req: NextRequest) {
