@@ -120,21 +120,22 @@ export default function DashboardPage() {
   // Finance
   // ---------------------------------------------------------------------------
 
-  const totalOutstanding = projects.reduce(
-    (sum, project) =>
-      sum +
-      (
-        safeNumber(project.invoiced) -
-        safeNumber(project.paid)
-      ),
-    0
-  );
+  const totalContractValue = projects.reduce(
+  (sum, project) =>
+    sum + safeNumber(project.budget),
+  0
+);
 
-  const totalRevenue = projects.reduce(
-    (sum, project) =>
-      sum + safeNumber(project.paid),
-    0
-  );
+const totalRevenue = projects.reduce(
+  (sum, project) =>
+    sum + safeNumber(project.paid),
+  0
+);
+
+const totalOutstanding = Math.max(
+  totalContractValue - totalRevenue,
+  0
+);
 
   // ---------------------------------------------------------------------------
   // Missing daily submissions
