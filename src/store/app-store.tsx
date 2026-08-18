@@ -6,6 +6,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useRef,
   ReactNode,
 } from "react";
 import { useSession } from "next-auth/react";
@@ -13,18 +14,30 @@ import { useSession } from "next-auth/react";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type Role = "ADMIN" | "ARCHITECT";
+
 export type ProjectStatus =
   | "ON_TRACK"
   | "AT_RISK"
   | "DELAYED"
   | "COMPLETED";
-export type PaymentStatus = "paid" | "partial" | "overdue" | "pending";
-export type Priority = "LOW" | "MEDIUM" | "HIGH";
+
+export type PaymentStatus =
+  | "paid"
+  | "partial"
+  | "overdue"
+  | "pending";
+
+export type Priority =
+  | "LOW"
+  | "MEDIUM"
+  | "HIGH";
+
 export type CommentType =
   | "FEEDBACK"
   | "APPROVAL"
   | "CHANGE_REQUEST"
   | "QUERY";
+
 export type NotificationType =
   | "INFO"
   | "WARNING"
@@ -45,6 +58,7 @@ export interface StaffMember {
   joinDate: string;
   isActive?: boolean;
   mustResetPassword?: boolean;
+
   _count?: {
     assignedProjects: number;
     dailyLogs: number;
@@ -59,7 +73,9 @@ export interface Client {
   phone?: string;
   address?: string;
   createdAt: string;
+
   projects?: Project[];
+
   portalEnabled?: boolean;
   lastPortalLoginAt?: string;
 }
@@ -68,22 +84,31 @@ export interface Project {
   id: string;
   sheetNo: string;
   name: string;
+
   clientId: string;
   client?: Client;
+
   location: string;
   description?: string;
+
   status: ProjectStatus;
   progress: number;
+
   architectId?: string;
   architect?: StaffMember;
+
   supervisorId?: string;
   supervisor?: StaffMember;
+
   startDate: string;
   dueDate: string;
+
   budget: number;
   invoiced: number;
   paid: number;
+
   priority: Priority;
+
   assignmentHistory?: AssignmentRecord[];
   dailyLogs?: DailyLog[];
   comments?: ClientComment[];
@@ -93,18 +118,24 @@ export interface Project {
 export interface AssignmentRecord {
   id: string;
   projectId: string;
+
   fromArchitectId?: string;
+
   fromArchitect?: {
     id: string;
     name: string;
   };
+
   toArchitectId: string;
+
   toArchitect?: {
     id: string;
     name: string;
   };
+
   reason?: string;
   date: string;
+
   performedBy?: {
     id: string;
     name: string;
@@ -114,44 +145,58 @@ export interface AssignmentRecord {
 export interface DailyLog {
   id: string;
   projectId: string;
+
   project?: {
     id: string;
     name: string;
     sheetNo: string;
   };
+
   authorId: string;
+
   author?: {
     id: string;
     name: string;
     initials: string;
     avatarUrl?: string | null;
   };
+
   date: string;
+
   workCompleted: string;
   challenges: string;
   pendingWork: string;
   nextActions: string;
+
   progress: number;
+
   submittedAt: string;
 }
 
 export interface ClientComment {
   id: string;
   projectId: string;
+
   project?: {
     id: string;
     name: string;
     sheetNo: string;
   };
+
   clientId: string;
+
   client?: {
     id: string;
     name: string;
   };
+
   author: string;
   content: string;
+
   type: CommentType;
+
   viaPortal?: boolean;
+
   createdAt: string;
   resolvedAt?: string;
 }
@@ -159,15 +204,19 @@ export interface ClientComment {
 export interface Payment {
   id: string;
   projectId: string;
+
   project?: {
     id: string;
     name: string;
     sheetNo: string;
   };
+
   amount: number;
   date: string;
+
   reference?: string;
   note?: string;
+
   recordedBy?: {
     id: string;
     name: string;
@@ -185,19 +234,27 @@ export interface Notification {
 export interface Document {
   id: string;
   name: string;
+
   fileKey: string;
   fileUrl: string;
+
   fileSize: number;
   mimeType: string;
+
   version: number;
+
   uploadedAt: string;
+
   projectId: string;
+
   project?: {
     id: string;
     name: string;
     sheetNo: string;
   };
+
   uploadedById: string;
+
   clientVisible?: boolean;
 }
 
@@ -245,7 +302,9 @@ export function priorityLabel(p: Priority) {
 }
 
 export function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
 
   if (bytes < 1024 * 1024) {
     return `${(bytes / 1024).toFixed(1)} KB`;
@@ -258,49 +317,133 @@ export function formatFileSize(bytes: number) {
 
 async function apiFetch<T>(
   url: string,
-  options?: RequestInit
+  options: RequestInit = {}
 ): Promise<T> {
-  const res = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options?.headers || {}),
-    },
-    credentials: "same-origin",
-    ...options,
-  });
+  const method = options.method ?? "GET";
 
-  const contentType = res.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
+  const headers = new Headers(options.headers);
 
-  if (!res.ok) {
-    if (res.status === 401) {
-      throw new Error("Unauthorized");
-    }
-
-    if (res.status === 403) {
-      throw new Error("You do not have permission to perform this action.");
-    }
-
-    const err = isJson
-      ? await res
-          .json()
-          .catch(() => ({ error: "Request failed" }))
-      : {
-          error: `Request failed (HTTP ${res.status})`,
-        };
-
-    throw new Error(
-      err?.error || `HTTP ${res.status}`
-    );
+  /*
+   * Only add Content-Type for requests that actually send JSON.
+   * This is important because FormData uploads must NOT have
+   * Content-Type manually set.
+   */
+  if (
+    options.body &&
+    !(options.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
+    headers.set("Content-Type", "application/json");
   }
 
-  if (!isJson) {
+  try {
+    const res = await fetch(url, {
+      ...options,
+      method,
+      headers,
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+
+    const contentType =
+      res.headers.get("content-type") || "";
+
+    const isJson =
+      contentType.includes("application/json");
+
+    let responseBody: unknown = null;
+
+    if (isJson) {
+      responseBody = await res
+        .json()
+        .catch(() => null);
+    } else {
+      responseBody = await res
+        .text()
+        .catch(() => "");
+    }
+
+    if (!res.ok) {
+      console.error(
+        `[API ${res.status}] ${method} ${url}`,
+        responseBody
+      );
+
+      if (res.status === 401) {
+        throw new Error(
+          `Unauthorized: your session may have expired.`
+        );
+      }
+
+      if (res.status === 403) {
+        throw new Error(
+          `Forbidden: you do not have permission to perform this action.`
+        );
+      }
+
+      if (res.status === 404) {
+        throw new Error(
+          `API endpoint not found: ${method} ${url}`
+        );
+      }
+
+      if (res.status === 413) {
+        throw new Error(
+          `The uploaded file is too large.`
+        );
+      }
+
+      let serverMessage = "";
+
+      if (
+        typeof responseBody === "object" &&
+        responseBody !== null
+      ) {
+        const body = responseBody as Record<
+          string,
+          unknown
+        >;
+
+        if (typeof body.error === "string") {
+          serverMessage = body.error;
+        } else if (
+          typeof body.message === "string"
+        ) {
+          serverMessage = body.message;
+        }
+      } else if (
+        typeof responseBody === "string"
+      ) {
+        serverMessage = responseBody;
+      }
+
+      throw new Error(
+        serverMessage ||
+          `API request failed: ${method} ${url} (HTTP ${res.status})`
+      );
+    }
+
+    if (!isJson) {
+      throw new Error(
+        `Server returned a non-JSON response for ${method} ${url}.`
+      );
+    }
+
+    return responseBody as T;
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(
+        `API request failed: ${method} ${url}`,
+        error
+      );
+
+      throw error;
+    }
+
     throw new Error(
-      "Server returned an unexpected non-JSON response."
+      `API request failed: ${method} ${url}`
     );
   }
-
-  return res.json();
 }
 
 // ─── Application State ───────────────────────────────────────────────────────
@@ -314,6 +457,7 @@ interface AppState {
   payments: Payment[];
   notifications: Notification[];
   documents: Document[];
+
   loading: boolean;
   error: string | null;
 }
@@ -330,7 +474,9 @@ interface AppActions {
     > & {
       password?: string;
     }
-  ) => Promise<{ temporaryPassword?: string }>;
+  ) => Promise<{
+    temporaryPassword?: string;
+  }>;
 
   updateStaff: (
     id: string,
@@ -339,12 +485,19 @@ interface AppActions {
       currentPassword?: string;
       resetPassword?: boolean;
     }
-  ) => Promise<{ temporaryPassword?: string }>;
+  ) => Promise<{
+    temporaryPassword?: string;
+  }>;
 
-  removeStaff: (id: string) => Promise<void>;
+  removeStaff: (
+    id: string
+  ) => Promise<void>;
 
   addClient: (
-    c: Omit<Client, "id" | "createdAt" | "projects">
+    c: Omit<
+      Client,
+      "id" | "createdAt" | "projects"
+    >
   ) => Promise<void>;
 
   updateClient: (
@@ -352,7 +505,9 @@ interface AppActions {
     patch: Partial<Client>
   ) => Promise<void>;
 
-  removeClient: (id: string) => Promise<void>;
+  removeClient: (
+    id: string
+  ) => Promise<void>;
 
   addProject: (p: {
     name: string;
@@ -372,7 +527,9 @@ interface AppActions {
     patch: Partial<Project>
   ) => Promise<void>;
 
-  removeProject: (id: string) => Promise<void>;
+  removeProject: (
+    id: string
+  ) => Promise<void>;
 
   reassignProject: (
     projectId: string,
@@ -397,7 +554,9 @@ interface AppActions {
     type: CommentType;
   }) => Promise<void>;
 
-  resolveComment: (id: string) => Promise<void>;
+  resolveComment: (
+    id: string
+  ) => Promise<void>;
 
   addPayment: (p: {
     projectId: string;
@@ -407,25 +566,28 @@ interface AppActions {
     note?: string;
   }) => Promise<void>;
 
-  markNotificationRead: (id: string) => Promise<void>;
+  markNotificationRead: (
+    id: string
+  ) => Promise<void>;
 
-  // IMPORTANT:
-  // category is optional so existing calls using
-  // uploadDocument(projectId, file) continue working.
   uploadDocument: (
     projectId: string,
     file: File,
     category?: string
   ) => Promise<void>;
 
-  removeDocument: (id: string) => Promise<void>;
+  removeDocument: (
+    id: string
+  ) => Promise<void>;
 
   toggleDocumentVisibility: (
     id: string,
     clientVisible: boolean
   ) => Promise<void>;
 
-  uploadAvatar: (file: File) => Promise<void>;
+  uploadAvatar: (
+    file: File
+  ) => Promise<void>;
 
   removeAvatar: () => Promise<void>;
 }
@@ -443,24 +605,35 @@ export function AppProvider({
 }: {
   children: ReactNode;
 }) {
-  const { status, data: session } = useSession();
+  const {
+    status,
+    data: session,
+  } = useSession();
 
   const isStaffSession =
     status === "authenticated" &&
     session?.user?.role !== "CLIENT";
 
-  const [state, setState] = useState<AppState>({
-    staff: [],
-    clients: [],
-    projects: [],
-    logs: [],
-    comments: [],
-    payments: [],
-    notifications: [],
-    documents: [],
-    loading: true,
-    error: null,
-  });
+  const [state, setState] =
+    useState<AppState>({
+      staff: [],
+      clients: [],
+      projects: [],
+      logs: [],
+      comments: [],
+      payments: [],
+      notifications: [],
+      documents: [],
+      loading: true,
+      error: null,
+    });
+
+  /*
+   * Prevent multiple refresh calls from executing
+   * simultaneously.
+   */
+  const refreshInFlight =
+    useRef<Promise<void> | null>(null);
 
   // ─── Refresh all staff data ───────────────────────────────────────────────
 
@@ -469,83 +642,139 @@ export function AppProvider({
       return;
     }
 
-    try {
-      setState((s) => ({
-        ...s,
-        loading: true,
-        error: null,
-      }));
-
-      const [
-        staff,
-        clients,
-        projects,
-        logs,
-        comments,
-        payments,
-        notificationResponse,
-        documents,
-      ] = await Promise.all([
-        apiFetch<StaffMember[]>("/api/staff"),
-        apiFetch<Client[]>("/api/clients"),
-        apiFetch<Project[]>("/api/projects"),
-        apiFetch<DailyLog[]>("/api/logs"),
-        apiFetch<ClientComment[]>("/api/comments"),
-        apiFetch<Payment[]>("/api/payments"),
-        apiFetch<{
-          notifications: Notification[];
-          unreadCount: number;
-        }>("/api/notifications"),
-        apiFetch<Document[]>("/api/documents"),
-      ]);
-
-      const notifications =
-        notificationResponse.notifications ?? [];
-
-      setState({
-        staff,
-        clients,
-        projects,
-        logs,
-        comments,
-        payments,
-        notifications,
-        documents,
-        loading: false,
-        error: null,
-      });
-    } catch (e) {
-      console.error("Failed to refresh application data:", e);
-
-      setState((s) => ({
-        ...s,
-        loading: false,
-        error:
-          e instanceof Error
-            ? e.message
-            : "Failed to load application data.",
-      }));
+    if (refreshInFlight.current) {
+      return refreshInFlight.current;
     }
+
+    const refreshPromise = (async () => {
+      try {
+        setState((s) => ({
+          ...s,
+          loading: true,
+          error: null,
+        }));
+
+        /*
+         * Each request is deliberately kept separate inside Promise.all.
+         * If one endpoint returns HTTP 500, the improved apiFetch()
+         * will now tell us EXACTLY which endpoint failed.
+         */
+        const [
+          staff,
+          clients,
+          projects,
+          logs,
+          comments,
+          payments,
+          notificationResponse,
+          documents,
+        ] = await Promise.all([
+          apiFetch<StaffMember[]>(
+            "/api/staff"
+          ),
+
+          apiFetch<Client[]>(
+            "/api/clients"
+          ),
+
+          apiFetch<Project[]>(
+            "/api/projects"
+          ),
+
+          apiFetch<DailyLog[]>(
+            "/api/logs"
+          ),
+
+          apiFetch<ClientComment[]>(
+            "/api/comments"
+          ),
+
+          apiFetch<Payment[]>(
+            "/api/payments"
+          ),
+
+          apiFetch<{
+            notifications: Notification[];
+            unreadCount: number;
+          }>(
+            "/api/notifications"
+          ),
+
+          apiFetch<Document[]>(
+            "/api/documents"
+          ),
+        ]);
+
+        const notifications =
+          notificationResponse?.notifications ??
+          [];
+
+        setState({
+          staff: staff ?? [],
+          clients: clients ?? [],
+          projects: projects ?? [],
+          logs: logs ?? [],
+          comments: comments ?? [],
+          payments: payments ?? [],
+          notifications,
+          documents: documents ?? [],
+          loading: false,
+          error: null,
+        });
+      } catch (error) {
+        console.error(
+          "Failed to refresh application data:",
+          error
+        );
+
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to load application data.";
+
+        setState((s) => ({
+          ...s,
+          loading: false,
+          error: message,
+        }));
+      } finally {
+        refreshInFlight.current = null;
+      }
+    })();
+
+    refreshInFlight.current =
+      refreshPromise;
+
+    return refreshPromise;
   }, [isStaffSession]);
 
   // ─── Initial data load ────────────────────────────────────────────────────
 
   useEffect(() => {
+    if (status === "loading") {
+      return;
+    }
+
     if (isStaffSession) {
-      refresh();
+      void refresh();
       return;
     }
 
     if (
       status === "unauthenticated" ||
-      (status === "authenticated" && !isStaffSession)
+      (status === "authenticated" &&
+        !isStaffSession)
     ) {
       setState((s) => ({
         ...s,
         loading: false,
       }));
     }
-  }, [status, isStaffSession, refresh]);
+  }, [
+    status,
+    isStaffSession,
+    refresh,
+  ]);
 
   // ─── Keep data fresh ──────────────────────────────────────────────────────
 
@@ -554,23 +783,32 @@ export function AppProvider({
       return;
     }
 
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        refresh();
+    const refreshIfVisible = () => {
+      if (
+        document.visibilityState ===
+        "visible"
+      ) {
+        void refresh();
       }
-    }, 30000);
+    };
+
+    const interval = setInterval(
+      refreshIfVisible,
+      30000
+    );
 
     const onFocus = () => {
-      refresh();
+      void refresh();
     };
 
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        refresh();
-      }
+      refreshIfVisible();
     };
 
-    window.addEventListener("focus", onFocus);
+    window.addEventListener(
+      "focus",
+      onFocus
+    );
 
     document.addEventListener(
       "visibilitychange",
@@ -590,13 +828,18 @@ export function AppProvider({
         onVisibilityChange
       );
     };
-  }, [isStaffSession, refresh]);
+  }, [
+    isStaffSession,
+    refresh,
+  ]);
 
-  // ─── Staff ─────────────────────────────────────────────────────────────────
+  // ─── Staff ────────────────────────────────────────────────────────────────
 
   const addStaff = useCallback(
     async (
-      data: Parameters<AppActions["addStaff"]>[0]
+      data: Parameters<
+        AppActions["addStaff"]
+      >[0]
     ) => {
       const result =
         await apiFetch<{
@@ -640,9 +883,12 @@ export function AppProvider({
 
   const removeStaff = useCallback(
     async (id: string) => {
-      await apiFetch(`/api/staff/${id}`, {
-        method: "DELETE",
-      });
+      await apiFetch(
+        `/api/staff/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
 
       await refresh();
     },
@@ -653,12 +899,17 @@ export function AppProvider({
 
   const addClient = useCallback(
     async (
-      data: Parameters<AppActions["addClient"]>[0]
+      data: Parameters<
+        AppActions["addClient"]
+      >[0]
     ) => {
-      await apiFetch("/api/clients", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      await apiFetch(
+        "/api/clients",
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      );
 
       await refresh();
     },
@@ -670,10 +921,13 @@ export function AppProvider({
       id: string,
       patch: Partial<Client>
     ) => {
-      await apiFetch(`/api/clients/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch),
-      });
+      await apiFetch(
+        `/api/clients/${id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        }
+      );
 
       await refresh();
     },
@@ -682,9 +936,12 @@ export function AppProvider({
 
   const removeClient = useCallback(
     async (id: string) => {
-      await apiFetch(`/api/clients/${id}`, {
-        method: "DELETE",
-      });
+      await apiFetch(
+        `/api/clients/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
 
       await refresh();
     },
@@ -695,15 +952,21 @@ export function AppProvider({
 
   const addProject = useCallback(
     async (
-      data: Parameters<AppActions["addProject"]>[0]
+      data: Parameters<
+        AppActions["addProject"]
+      >[0]
     ) => {
-      await apiFetch("/api/projects", {
-        method: "POST",
-        body: JSON.stringify({
-          ...data,
-          priority: data.priority.toUpperCase(),
-        }),
-      });
+      await apiFetch(
+        "/api/projects",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...data,
+            priority:
+              data.priority.toUpperCase(),
+          }),
+        }
+      );
 
       await refresh();
     },
@@ -715,41 +978,11 @@ export function AppProvider({
       id: string,
       patch: Partial<Project>
     ) => {
-      await apiFetch(`/api/projects/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch),
-      });
-
-      await refresh();
-    },
-    [refresh]
-  );
-
-  const removeProject = useCallback(
-    async (id: string) => {
-      await apiFetch(`/api/projects/${id}`, {
-        method: "DELETE",
-      });
-
-      await refresh();
-    },
-    [refresh]
-  );
-
-  const reassignProject = useCallback(
-    async (
-      projectId: string,
-      toArchitectId: string,
-      reason: string
-    ) => {
       await apiFetch(
-        `/api/projects/${projectId}/reassign`,
+        `/api/projects/${id}`,
         {
-          method: "POST",
-          body: JSON.stringify({
-            toArchitectId,
-            reason,
-          }),
+          method: "PATCH",
+          body: JSON.stringify(patch),
         }
       );
 
@@ -758,16 +991,58 @@ export function AppProvider({
     [refresh]
   );
 
+  const removeProject = useCallback(
+    async (id: string) => {
+      await apiFetch(
+        `/api/projects/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const reassignProject =
+    useCallback(
+      async (
+        projectId: string,
+        toArchitectId: string,
+        reason: string
+      ) => {
+        await apiFetch(
+          `/api/projects/${projectId}/reassign`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              toArchitectId,
+              reason,
+            }),
+          }
+        );
+
+        await refresh();
+      },
+      [refresh]
+    );
+
   // ─── Daily Logs ───────────────────────────────────────────────────────────
 
   const addLog = useCallback(
     async (
-      data: Parameters<AppActions["addLog"]>[0]
+      data: Parameters<
+        AppActions["addLog"]
+      >[0]
     ) => {
-      await apiFetch("/api/logs", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      await apiFetch(
+        "/api/logs",
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      );
 
       await refresh();
     },
@@ -778,15 +1053,21 @@ export function AppProvider({
 
   const addComment = useCallback(
     async (
-      data: Parameters<AppActions["addComment"]>[0]
+      data: Parameters<
+        AppActions["addComment"]
+      >[0]
     ) => {
-      await apiFetch("/api/comments", {
-        method: "POST",
-        body: JSON.stringify({
-          ...data,
-          type: data.type.toUpperCase(),
-        }),
-      });
+      await apiFetch(
+        "/api/comments",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...data,
+            type:
+              data.type.toUpperCase(),
+          }),
+        }
+      );
 
       await refresh();
     },
@@ -811,12 +1092,17 @@ export function AppProvider({
 
   const addPayment = useCallback(
     async (
-      data: Parameters<AppActions["addPayment"]>[0]
+      data: Parameters<
+        AppActions["addPayment"]
+      >[0]
     ) => {
-      await apiFetch("/api/payments", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      await apiFetch(
+        "/api/payments",
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      );
 
       await refresh();
     },
@@ -825,209 +1111,249 @@ export function AppProvider({
 
   // ─── Notifications ───────────────────────────────────────────────────────
 
-  const markNotificationRead = useCallback(
-    async (id: string) => {
-      await apiFetch(
-        `/api/notifications/${id}`,
-        {
-          method: "PATCH",
-        }
-      );
-
-      setState((s) => ({
-        ...s,
-        notifications: s.notifications.map(
-          (notification) =>
-            notification.id === id
-              ? {
-                  ...notification,
-                  read: true,
-                }
-              : notification
-        ),
-      }));
-    },
-    []
-  );
-
-  // ─── DOCUMENT UPLOAD ─────────────────────────────────────────────────────
-
-  const uploadDocument = useCallback(
-    async (
-      projectId: string,
-      file: File,
-      category: string = "OTHER"
-    ): Promise<void> => {
-      // Basic validation
-      if (!projectId) {
-        throw new Error(
-          "A project must be selected before uploading."
-        );
-      }
-
-      if (!(file instanceof File)) {
-        throw new Error(
-          "Invalid file selected."
-        );
-      }
-
-      if (file.size === 0) {
-        throw new Error(
-          `"${file.name}" is empty.`
-        );
-      }
-
-      console.log(
-        "Starting document upload:",
-        {
-          projectId,
-          fileName: file.name,
-          fileSize: file.size,
-          mimeType: file.type,
-          category,
-        }
-      );
-
-      // Build multipart request
-      const formData = new FormData();
-
-      formData.append(
-        "file",
-        file,
-        file.name
-      );
-
-      formData.append(
-        "projectId",
-        projectId
-      );
-
-      formData.append(
-        "category",
-        category
-      );
-
-      let response: Response;
-
-      try {
-        response = await fetch(
-          "/api/documents",
+  const markNotificationRead =
+    useCallback(
+      async (id: string) => {
+        await apiFetch(
+          `/api/notifications/${id}`,
           {
-            method: "POST",
-            body: formData,
-            credentials: "same-origin",
+            method: "PATCH",
           }
         );
-      } catch (error) {
-        console.error(
-          "Document upload network error:",
-          error
-        );
 
-        throw new Error(
-          "Could not connect to the document upload service."
-        );
-      }
+        setState((s) => ({
+          ...s,
+          notifications:
+            s.notifications.map(
+              (notification) =>
+                notification.id === id
+                  ? {
+                      ...notification,
+                      read: true,
+                    }
+                  : notification
+            ),
+        }));
+      },
+      []
+    );
 
-      // Read server response
-      const contentType =
-        response.headers.get(
-          "content-type"
-        ) || "";
+  // ─── Document Upload ──────────────────────────────────────────────────────
 
-      let result: any = null;
-
-      if (
-        contentType.includes(
-          "application/json"
-        )
-      ) {
-        result = await response
-          .json()
-          .catch(() => null);
-      } else {
-        const text =
-          await response.text();
-
-        result = {
-          error:
-            text ||
-            `Upload failed with HTTP ${response.status}`,
-        };
-      }
-
-      console.log(
-        "Document upload response:",
-        {
-          status: response.status,
-          result,
-        }
-      );
-
-      // Handle server errors
-      if (!response.ok) {
-        if (response.status === 401) {
+  const uploadDocument =
+    useCallback(
+      async (
+        projectId: string,
+        file: File,
+        category = "OTHER"
+      ): Promise<void> => {
+        if (!projectId) {
           throw new Error(
-            "Your session has expired. Please log in again."
+            "A project must be selected before uploading."
           );
         }
 
-        if (response.status === 403) {
+        if (!(file instanceof File)) {
           throw new Error(
-            "You do not have permission to upload documents to this project."
+            "Invalid file selected."
           );
         }
 
-        if (response.status === 413) {
+        if (file.size === 0) {
           throw new Error(
-            "The file is too large to upload."
+            `"${file.name}" is empty.`
           );
         }
 
-        throw new Error(
-          result?.error ||
-            `Upload failed with HTTP ${response.status}`
+        console.log(
+          "Starting document upload:",
+          {
+            projectId,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+            category,
+          }
         );
-      }
 
-      // Make sure server actually created a document
-      if (!result?.id) {
-        console.error(
-          "Upload response did not contain a document ID:",
+        const formData =
+          new FormData();
+
+        formData.append(
+          "file",
+          file,
+          file.name
+        );
+
+        formData.append(
+          "projectId",
+          projectId
+        );
+
+        formData.append(
+          "category",
+          category
+        );
+
+        let response: Response;
+
+        try {
+          response = await fetch(
+            "/api/documents",
+            {
+              method: "POST",
+              body: formData,
+              credentials:
+                "same-origin",
+              cache: "no-store",
+            }
+          );
+        } catch (error) {
+          console.error(
+            "Document upload network error:",
+            error
+          );
+
+          throw new Error(
+            "Could not connect to the document upload service."
+          );
+        }
+
+        const contentType =
+          response.headers.get(
+            "content-type"
+          ) || "";
+
+        let result: unknown = null;
+
+        if (
+          contentType.includes(
+            "application/json"
+          )
+        ) {
+          result = await response
+            .json()
+            .catch(() => null);
+        } else {
+          const text =
+            await response
+              .text()
+              .catch(() => "");
+
+          result = {
+            error:
+              text ||
+              `Upload failed with HTTP ${response.status}`,
+          };
+        }
+
+        console.log(
+          "Document upload response:",
+          {
+            status: response.status,
+            result,
+          }
+        );
+
+        if (!response.ok) {
+          if (
+            response.status === 401
+          ) {
+            throw new Error(
+              "Your session has expired. Please log in again."
+            );
+          }
+
+          if (
+            response.status === 403
+          ) {
+            throw new Error(
+              "You do not have permission to upload documents to this project."
+            );
+          }
+
+          if (
+            response.status === 413
+          ) {
+            throw new Error(
+              "The file is too large to upload."
+            );
+          }
+
+          let message =
+            `Upload failed with HTTP ${response.status}`;
+
+          if (
+            typeof result ===
+              "object" &&
+            result !== null
+          ) {
+            const body =
+              result as Record<
+                string,
+                unknown
+              >;
+
+            if (
+              typeof body.error ===
+              "string"
+            ) {
+              message =
+                body.error;
+            } else if (
+              typeof body.message ===
+              "string"
+            ) {
+              message =
+                body.message;
+            }
+          }
+
+          throw new Error(message);
+        }
+
+        if (
+          typeof result !==
+            "object" ||
+          result === null ||
+          !("id" in result)
+        ) {
+          console.error(
+            "Upload response did not contain a document ID:",
+            result
+          );
+
+          throw new Error(
+            "The server accepted the upload but did not return a document record."
+          );
+        }
+
+        console.log(
+          "Document uploaded successfully:",
           result
         );
 
-        throw new Error(
-          "The server accepted the upload but did not return a document record."
-        );
-      }
-
-      console.log(
-        "Document uploaded successfully:",
-        result
-      );
-
-      // Refresh document list
-      await refresh();
-    },
-    [refresh]
-  );
+        await refresh();
+      },
+      [refresh]
+    );
 
   // ─── Documents ────────────────────────────────────────────────────────────
 
-  const removeDocument = useCallback(
-    async (id: string) => {
-      await apiFetch(
-        `/api/documents/${id}`,
-        {
-          method: "DELETE",
-        }
-      );
+  const removeDocument =
+    useCallback(
+      async (id: string) => {
+        await apiFetch(
+          `/api/documents/${id}`,
+          {
+            method: "DELETE",
+          }
+        );
 
-      await refresh();
-    },
-    [refresh]
-  );
+        await refresh();
+      },
+      [refresh]
+    );
 
   const toggleDocumentVisibility =
     useCallback(
@@ -1060,7 +1386,8 @@ export function AppProvider({
         );
       }
 
-      const form = new FormData();
+      const form =
+        new FormData();
 
       form.append(
         "file",
@@ -1068,27 +1395,65 @@ export function AppProvider({
         file.name
       );
 
-      const res = await fetch(
-        "/api/users/me/avatar",
-        {
-          method: "POST",
-          body: form,
-          credentials: "same-origin",
-        }
-      );
+      const res =
+        await fetch(
+          "/api/users/me/avatar",
+          {
+            method: "POST",
+            body: form,
+            credentials:
+              "same-origin",
+            cache: "no-store",
+          }
+        );
 
       if (!res.ok) {
-        const err =
-          await res
-            .json()
-            .catch(() => ({
-              error: "Upload failed",
-            }));
+        const contentType =
+          res.headers.get(
+            "content-type"
+          ) || "";
 
-        throw new Error(
-          err.error ||
-            `HTTP ${res.status}`
-        );
+        let message =
+          `Avatar upload failed with HTTP ${res.status}`;
+
+        if (
+          contentType.includes(
+            "application/json"
+          )
+        ) {
+          const err =
+            await res
+              .json()
+              .catch(() => null);
+
+          if (
+            err &&
+            typeof err ===
+              "object"
+          ) {
+            const body =
+              err as Record<
+                string,
+                unknown
+              >;
+
+            if (
+              typeof body.error ===
+              "string"
+            ) {
+              message =
+                body.error;
+            } else if (
+              typeof body.message ===
+              "string"
+            ) {
+              message =
+                body.message;
+            }
+          }
+        }
+
+        throw new Error(message);
       }
 
       await refresh();
@@ -1096,19 +1461,20 @@ export function AppProvider({
     [refresh]
   );
 
-  const removeAvatar = useCallback(
-    async () => {
-      await apiFetch(
-        "/api/users/me/avatar",
-        {
-          method: "DELETE",
-        }
-      );
+  const removeAvatar =
+    useCallback(
+      async () => {
+        await apiFetch(
+          "/api/users/me/avatar",
+          {
+            method: "DELETE",
+          }
+        );
 
-      await refresh();
-    },
-    [refresh]
-  );
+        await refresh();
+      },
+      [refresh]
+    );
 
   // ─── Provider ─────────────────────────────────────────────────────────────
 
