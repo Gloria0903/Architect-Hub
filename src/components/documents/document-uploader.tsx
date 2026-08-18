@@ -26,7 +26,15 @@ interface QueuedFile {
   error?: string;
 }
 
-const ACCEPT_ATTR = Object.keys(ALLOWED_DOCUMENT_TYPES).join(",");
+const ACCEPT_ATTR = [
+  ...Object.keys(ALLOWED_DOCUMENT_TYPES),
+  ".rvt",
+  ".rfa",
+  ".dwg",
+  ".dxf",
+  ".skp",
+  ".ifc",
+].join(",");
 
 /**
  * Uploads via a single multipart POST straight to /api/documents (new) or
@@ -47,6 +55,12 @@ export function DocumentUploader({ target, onComplete, onError }: DocumentUpload
 
   const uploadOne = useCallback(
     async (file: File) => {
+
+      console.log("[DocumentUploader] uploadOne called:", {
+  name: file.name,
+  type: file.type,
+  size: file.size,
+});
       // Fast client-side feedback only — the server repeats this check
       // (and the magic-byte sniff) against the real bytes regardless.
       const validation = validateDocumentUpload({
@@ -55,14 +69,31 @@ export function DocumentUploader({ target, onComplete, onError }: DocumentUpload
         sizeBytes: file.size,
       });
       if (!validation.ok) {
-        setQueue((q) =>
-          q.map((item) =>
-            item.file === file ? { ...item, status: "error", error: validation.error } : item
-          )
-        );
-        onError?.(validation.error!);
-        return;
-      }
+  console.error("[DocumentUploader] Client validation failed:", {
+    file: file.name,
+    type: file.type,
+    size: file.size,
+    error: validation.error,
+  });
+
+  setQueue((q) =>
+    q.map((item) =>
+      item.file === file
+        ? {
+            ...item,
+            status: "error",
+            error: validation.error,
+          }
+        : item
+    )
+  );
+
+  onError?.(validation.error || "File validation failed.");
+
+  return;
+}
+
+console.log("[DocumentUploader] Client validation passed:", file.name);
 
       try {
         const formData = new FormData();
@@ -83,13 +114,24 @@ export function DocumentUploader({ target, onComplete, onError }: DocumentUpload
 
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
-          xhr.open("POST", url);
+          console.log("[DocumentUploader] Sending upload request:", {
+  url,
+  file: file.name,
+  type: file.type,
+  size: file.size,
+});
+
+xhr.open("POST", url);
           xhr.upload.onprogress = (e) => {
             if (!e.lengthComputable) return;
             const progress = Math.round((e.loaded / e.total) * 100);
             setQueue((q) => q.map((item) => (item.file === file ? { ...item, progress } : item)));
           };
           xhr.onload = () => {
+  console.log("[DocumentUploader] Upload response:", {
+    status: xhr.status,
+    response: xhr.responseText,
+  });
             if (xhr.status >= 200 && xhr.status < 300) {
               resolve();
               return;
@@ -103,8 +145,13 @@ export function DocumentUploader({ target, onComplete, onError }: DocumentUpload
             }
             reject(new Error(message));
           };
-          xhr.onerror = () => reject(new Error("Network error during upload"));
-          xhr.send(formData);
+          xhr.onerror = () => {
+  console.error("[DocumentUploader] XHR network error");
+  reject(new Error("Network error during upload"));
+};
+          console.log("[DocumentUploader] xhr.send()");
+
+xhr.send(formData);
         });
 
         setQueue((q) =>
@@ -123,18 +170,40 @@ export function DocumentUploader({ target, onComplete, onError }: DocumentUpload
   );
 
   const handleFiles = useCallback(
-    (files: FileList | null) => {
-      if (!files || files.length === 0) return;
-      const incoming: QueuedFile[] = Array.from(files).map((file) => ({
-        file,
-        progress: 0,
-        status: "pending",
-      }));
-      setQueue((q) => [...q, ...incoming]);
-      incoming.forEach((item) => uploadOne(item.file));
-    },
-    [uploadOne]
-  );
+  (files: FileList | null) => {
+    console.log("[DocumentUploader] handleFiles fired");
+
+    if (!files || files.length === 0) {
+      console.warn("[DocumentUploader] No files selected");
+      return;
+    }
+
+    const selectedFiles = Array.from(files);
+
+    console.log(
+      "[DocumentUploader] Selected files:",
+      selectedFiles.map((file) => ({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+      }))
+    );
+
+    const incoming: QueuedFile[] = selectedFiles.map((file) => ({
+      file,
+      progress: 0,
+      status: "pending",
+    }));
+
+    setQueue((q) => [...q, ...incoming]);
+
+    incoming.forEach((item) => {
+      console.log("[DocumentUploader] Starting upload:", item.file.name);
+      void uploadOne(item.file);
+    });
+  },
+  [uploadOne]
+);
 
   return (
     <div className="space-y-3">
