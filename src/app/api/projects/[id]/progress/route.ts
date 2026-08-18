@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { canAccessProject } from "@/lib/rbac";
+import {
+  calculateProjectProgress,
+  calculateTaskProgress,
+  calculateMilestoneProgress,
+} from "@/lib/project-progress";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -10,8 +15,13 @@ type RouteContext = {
 /**
  * GET /api/projects/[id]/progress
  *
- * Returns the current calculated project progress together with
- * task/phase statistics.
+ * Returns calculated physical project progress.
+ *
+ * Progress is based on:
+ * - Task completion: 80%
+ * - Milestone completion: 20%
+ *
+ * If only tasks or milestones exist, that source is used directly.
  */
 export async function GET(
   _req: NextRequest,
@@ -31,10 +41,36 @@ export async function GET(
   const project = await prisma.project.findUnique({
     where: { id },
     include: {
-      tasks: true,
+      tasks: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          completion: true,
+          weight: true,
+          phaseId: true,
+        },
+      },
+
+      milestones: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          weight: true,
+          phaseId: true,
+        },
+      },
+
       phases: {
-        include: {
-          tasks: true,
+        select: {
+          id: true,
+          name: true,
+          weight: true,
+          sortOrder: true,
+        },
+        orderBy: {
+          sortOrder: "asc",
         },
       },
     },
@@ -55,75 +91,90 @@ export async function GET(
   }
 
   const tasks = project.tasks ?? [];
-  const phases = project.phases ?? [];
+  const milestones = project.milestones ?? [];
 
-  const totalTasks = tasks.length;
+  const taskProgress = calculateTaskProgress(tasks);
+  const milestoneProgress =
+    calculateMilestoneProgress(milestones);
 
-  const completedTasks = tasks.filter(
-    (task) => task.status === "COMPLETED"
-  ).length;
-
-  const verifiedTasks = tasks.filter(
-    (task) => task.status === "VERIFIED"
-  ).length;
-
-  const taskProgress =
-    totalTasks > 0
-      ? Math.round(
-          ((completedTasks + verifiedTasks) / totalTasks) * 100
-        )
-      : 0;
-
-  const totalPhases = phases.length;
-
-  const completedPhases = phases.filter(
-    (phase) => phase.status === "COMPLETED"
-  ).length;
-
-  const phaseProgress =
-    totalPhases > 0
-      ? Math.round((completedPhases / totalPhases) * 100)
-      : 0;
+  const calculatedProgress =
+    calculateProjectProgress({
+      tasks,
+      milestones,
+    });
 
   /**
-   * If there are both phases and tasks, use a weighted average.
+   * Calculate progress for each phase.
    *
-   * This prevents a project with many tasks but incomplete phases
-   * from appearing artificially complete.
+   * A phase does not have its own status in the database.
+   * Its progress is therefore calculated from the tasks
+   * and milestones belonging to that phase.
    */
-  let calculatedProgress = 0;
-
-  if (totalTasks > 0 && totalPhases > 0) {
-    calculatedProgress = Math.round(
-      taskProgress * 0.7 + phaseProgress * 0.3
+  const phaseProgress = project.phases.map((phase) => {
+    const phaseTasks = tasks.filter(
+      (task) => task.phaseId === phase.id
     );
-  } else if (totalTasks > 0) {
-    calculatedProgress = taskProgress;
-  } else if (totalPhases > 0) {
-    calculatedProgress = phaseProgress;
-  } else {
-    calculatedProgress = project.progress ?? 0;
-  }
+
+    const phaseMilestones = milestones.filter(
+      (milestone) =>
+        milestone.phaseId === phase.id
+    );
+
+    const progress =
+      calculateProjectProgress({
+        tasks: phaseTasks,
+        milestones: phaseMilestones,
+      });
+
+    return {
+      id: phase.id,
+      name: phase.name,
+      weight: phase.weight,
+      progress,
+      tasks: {
+        total: phaseTasks.length,
+        progress: calculateTaskProgress(phaseTasks),
+      },
+      milestones: {
+        total: phaseMilestones.length,
+        progress:
+          calculateMilestoneProgress(
+            phaseMilestones
+          ),
+      },
+    };
+  });
 
   return NextResponse.json({
     projectId: project.id,
+
     progress: calculatedProgress,
 
     tasks: {
-      total: totalTasks,
-      completed: completedTasks,
-      verified: verifiedTasks,
+      total: tasks.length,
+      completed: tasks.filter(
+        (task) =>
+          task.status === "COMPLETED" ||
+          task.status === "VERIFIED"
+      ).length,
       progress: taskProgress,
     },
 
-    phases: {
-      total: totalPhases,
-      completed: completedPhases,
-      progress: phaseProgress,
+    milestones: {
+      total: milestones.length,
+      completed: milestones.filter(
+        (milestone) =>
+          milestone.status === "COMPLETED" ||
+          milestone.status === "APPROVED"
+      ).length,
+      progress: milestoneProgress,
     },
 
+    phases: phaseProgress,
+
     source:
-      totalTasks > 0 || totalPhases > 0
+      tasks.length > 0 ||
+      milestones.length > 0
         ? "calculated"
         : "project_record",
   });
@@ -132,10 +183,9 @@ export async function GET(
 /**
  * PATCH /api/projects/[id]/progress
  *
- * Recalculates and stores the project's progress.
+ * Recalculates and stores the project's physical progress.
  *
- * The client does NOT send an arbitrary percentage.
- * Progress is calculated from project tasks and phases.
+ * The client does NOT provide a percentage.
  */
 export async function PATCH(
   _req: NextRequest,
@@ -155,10 +205,20 @@ export async function PATCH(
   const project = await prisma.project.findUnique({
     where: { id },
     include: {
-      tasks: true,
-      phases: {
-        include: {
-          tasks: true,
+      tasks: {
+        select: {
+          id: true,
+          status: true,
+          completion: true,
+          weight: true,
+        },
+      },
+
+      milestones: {
+        select: {
+          id: true,
+          status: true,
+          weight: true,
         },
       },
     },
@@ -178,69 +238,57 @@ export async function PATCH(
     );
   }
 
-  const tasks = project.tasks ?? [];
-  const phases = project.phases ?? [];
+  const calculatedProgress =
+    calculateProjectProgress({
+      tasks: project.tasks,
+      milestones: project.milestones,
+    });
 
-  const totalTasks = tasks.length;
-
-  const completedTasks = tasks.filter(
-    (task) =>
-      task.status === "COMPLETED" ||
-      task.status === "VERIFIED"
-  ).length;
-
-  const taskProgress =
-    totalTasks > 0
-      ? Math.round((completedTasks / totalTasks) * 100)
-      : 0;
-
-  const totalPhases = phases.length;
-
-  const completedPhases = phases.filter(
-    (phase) => phase.status === "COMPLETED"
-  ).length;
-
-  const phaseProgress =
-    totalPhases > 0
-      ? Math.round((completedPhases / totalPhases) * 100)
-      : 0;
-
-  let calculatedProgress = 0;
-
-  if (totalTasks > 0 && totalPhases > 0) {
-    calculatedProgress = Math.round(
-      taskProgress * 0.7 + phaseProgress * 0.3
-    );
-  } else if (totalTasks > 0) {
-    calculatedProgress = taskProgress;
-  } else if (totalPhases > 0) {
-    calculatedProgress = phaseProgress;
-  } else {
-    calculatedProgress = project.progress ?? 0;
-  }
-
-  const updatedProject = await prisma.project.update({
-    where: { id },
-    data: {
-      progress: calculatedProgress,
-    },
-  });
+  const updatedProject =
+    await prisma.project.update({
+      where: { id },
+      data: {
+        progress: calculatedProgress,
+      },
+    });
 
   return NextResponse.json({
     success: true,
+
     projectId: updatedProject.id,
+
     progress: updatedProject.progress,
 
     tasks: {
-      total: totalTasks,
-      completed: completedTasks,
-      progress: taskProgress,
+      total: project.tasks.length,
+
+      completed:
+        project.tasks.filter(
+          (task) =>
+            task.status === "COMPLETED" ||
+            task.status === "VERIFIED"
+        ).length,
+
+      progress:
+        calculateTaskProgress(
+          project.tasks
+        ),
     },
 
-    phases: {
-      total: totalPhases,
-      completed: completedPhases,
-      progress: phaseProgress,
+    milestones: {
+      total: project.milestones.length,
+
+      completed:
+        project.milestones.filter(
+          (milestone) =>
+            milestone.status === "COMPLETED" ||
+            milestone.status === "APPROVED"
+        ).length,
+
+      progress:
+        calculateMilestoneProgress(
+          project.milestones
+        ),
     },
   });
 }

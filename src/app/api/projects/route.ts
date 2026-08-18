@@ -7,6 +7,7 @@ import { z } from "zod";
 import { projectAccessWhere, canCreateProjects, isAdmin } from "@/lib/rbac";
 import { generateProjectSheetNo } from "@/lib/project-number";
 import { logActivity } from "@/lib/activity-log";
+import { calculateProjectProgress } from "@/lib/project-progress";
 
 const CreateProjectSchema = z.object({
   name: z.string().min(2),
@@ -75,12 +76,27 @@ export async function GET(req: NextRequest) {
       },
 
       _count: {
-        select: {
-          dailyLogs: true,
-          documents: true,
-          comments: true,
-        },
-      },
+  select: {
+    dailyLogs: true,
+    documents: true,
+    comments: true,
+  },
+},
+
+tasks: {
+  select: {
+    weight: true,
+    completion: true,
+    status: true,
+  },
+},
+
+milestones: {
+  select: {
+    weight: true,
+    status: true,
+  },
+},
     },
 
     orderBy: {
@@ -88,7 +104,24 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  return NextResponse.json(projects);
+  const projectsWithCalculatedProgress = projects.map(
+  (project) => {
+    const calculatedProgress =
+      calculateProjectProgress({
+        tasks: project.tasks,
+        milestones: project.milestones,
+      });
+
+    return {
+      ...project,
+      progress: calculatedProgress,
+    };
+  }
+);
+
+return NextResponse.json(
+  projectsWithCalculatedProgress
+);
 }
 
 export async function POST(req: NextRequest) {

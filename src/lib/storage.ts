@@ -17,7 +17,7 @@ const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 const isS3Configured = Boolean(process.env.AWS_S3_BUCKET && process.env.AWS_REGION);
 
 if (!isS3Configured && process.env.NODE_ENV === "production") {
-  // eslint-disable-next-line no-console
+
   console.warn(
     "[storage] AWS_S3_BUCKET/AWS_REGION not set in a production environment — " +
       "falling back to local disk. Uploaded files will NOT survive a redeploy " +

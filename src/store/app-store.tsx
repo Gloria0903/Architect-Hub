@@ -624,7 +624,7 @@ export function AppProvider({
       payments: [],
       notifications: [],
       documents: [],
-      loading: true,
+      loading: false,
       error: null,
     });
 
@@ -751,30 +751,14 @@ export function AppProvider({
   // ─── Initial data load ────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (status === "loading") {
-      return;
-    }
+  if (status === "loading") {
+    return;
+  }
 
-    if (isStaffSession) {
-      void refresh();
-      return;
-    }
-
-    if (
-      status === "unauthenticated" ||
-      (status === "authenticated" &&
-        !isStaffSession)
-    ) {
-      setState((s) => ({
-        ...s,
-        loading: false,
-      }));
-    }
-  }, [
-    status,
-    isStaffSession,
-    refresh,
-  ]);
+  if (isStaffSession) {
+    void refresh();
+  }
+}, [status, isStaffSession, refresh]);
 
   // ─── Keep data fresh ──────────────────────────────────────────────────────
 

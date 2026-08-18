@@ -11,6 +11,7 @@ import { useStore, formatKsh, formatFileSize, commentTypeLabel, priorityLabel, P
 import Link from "next/link";
 import { Repeat, Upload, FileText, MessageSquare, Wallet, History, CheckCircle, Pencil, Trash2, Download, File as FileIcon, ArrowRightLeft, Eye, EyeOff, Archive } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { calculateFinancialProgress } from "@/lib/project-progress";
 
 const tabs = [
   { key: "overview", label: "Overview", icon: FileText },
@@ -48,9 +49,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [payOpen, setPayOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({
-    name: project.name, description: project.description ?? "", status: project.status as ProjectStatus,
-    progress: project.progress, priority: project.priority as Priority, dueDate: project.dueDate,
-  });
+  name: project.name,
+  description: project.description ?? "",
+  status: project.status as ProjectStatus,
+  priority: project.priority as Priority,
+  dueDate: project.dueDate,
+});
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -160,7 +164,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 const invoiced = Number(project.invoiced || 0);
 const paid = Number(project.paid || 0);
 
-const outstanding = Math.max(contractValue - paid, 0);
+const financialProgress =
+  calculateFinancialProgress({
+    contractValue: project.budget,
+    invoiced: project.invoiced,
+    paid: project.paid,
+  });
+
+const outstanding =
+  financialProgress.outstanding;
+
+const collectedPercentage =
+  financialProgress.collectedPercentage;
 
 const invoicedPercentage =
   contractValue > 0
@@ -224,12 +239,33 @@ const outstandingPercentage =
           </div>
           <div className="mt-4 pt-3 border-t border-line">
             <div className="flex items-center justify-between mb-1.5">
-              <div className="text-muted text-[12px]">Overall progress</div>
-              <div className="font-mono text-[12px]" style={{color: statusColor}}>{project.progress}%</div>
-            </div>
-            <div className="w-full h-2 bg-line rounded-full overflow-hidden">
-              <div className="h-full rounded-full transition-all" style={{ width: `${project.progress}%`, background: statusColor }} />
-            </div>
+  <div>
+    <div className="text-muted text-[12px]">
+      Overall project progress
+    </div>
+
+    <div className="text-[10px] text-muted mt-0.5">
+      Based on tasks and milestones
+    </div>
+  </div>
+
+  <div
+    className="font-mono text-[12px]"
+    style={{ color: statusColor }}
+  >
+    {project.progress}%
+  </div>
+</div>
+
+<div className="w-full h-2 bg-line rounded-full overflow-hidden">
+  <div
+    className="h-full rounded-full transition-all"
+    style={{
+      width: `${project.progress}%`,
+      background: statusColor,
+    }}
+  />
+</div>
           </div>
         </Card>
 
@@ -277,8 +313,9 @@ const outstandingPercentage =
       <div className="text-muted mb-0.5">
         Contract value
       </div>
+
       <div className="font-mono text-ink">
-        {formatKsh(contractValue)}
+        {formatKsh(financialProgress.contractValue)}
       </div>
     </div>
 
@@ -286,11 +323,13 @@ const outstandingPercentage =
       <div className="text-muted mb-0.5">
         Invoiced
       </div>
+
       <div className="font-mono text-ink">
-        {formatKsh(invoiced)}
+        {formatKsh(financialProgress.invoiced)}
       </div>
+
       <div className="text-[10px] text-muted mt-0.5">
-        {invoicedPercentage}% of contract
+        {invoicedPercentage.toFixed(2)}% of contract
       </div>
     </div>
 
@@ -298,11 +337,13 @@ const outstandingPercentage =
       <div className="text-muted mb-0.5">
         Paid
       </div>
+
       <div className="font-mono text-moss">
-        {formatKsh(paid)}
+        {formatKsh(financialProgress.paid)}
       </div>
+
       <div className="text-[10px] text-moss mt-0.5">
-        {paidPercentage}% collected
+        {collectedPercentage.toFixed(2)}% collected
       </div>
     </div>
 
@@ -310,23 +351,25 @@ const outstandingPercentage =
       <div className="text-muted mb-0.5">
         Outstanding
       </div>
+
       <div className="font-mono text-brick">
-        {formatKsh(outstanding)}
+        {formatKsh(financialProgress.outstanding)}
       </div>
+
       <div className="text-[10px] text-brick mt-0.5">
-        {outstandingPercentage}% outstanding
+        {(100 - collectedPercentage).toFixed(2)}% remaining
       </div>
     </div>
   </div>
 
   <div className="mt-3 pt-3 border-t border-line">
-    <div className="flex items-center justify-between mb-1.5">
+    <div className="flex items-center justify-between mb-1">
       <span className="text-[11px] text-muted">
-        Payment progress
+        Payment collection
       </span>
 
-      <span className="font-mono text-[11px] text-moss">
-        {paidPercentage}% collected
+      <span className="text-[11px] font-mono text-moss">
+        {collectedPercentage.toFixed(2)}%
       </span>
     </div>
 
@@ -334,18 +377,18 @@ const outstandingPercentage =
       <div
         className="h-full bg-moss rounded-full transition-all"
         style={{
-          width: `${paidPercentage}%`,
+          width: `${collectedPercentage}%`,
         }}
       />
     </div>
 
-    <div className="flex items-center justify-between mt-1">
-      <span className="text-[10.5px] text-muted">
-        {formatKsh(paid)} received
+    <div className="flex items-center justify-between text-[10.5px] mt-1">
+      <span className="text-muted">
+        {formatKsh(financialProgress.paid)} received
       </span>
 
-      <span className="text-[10.5px] text-brick">
-        {formatKsh(outstanding)} remaining
+      <span className="text-brick">
+        {formatKsh(financialProgress.outstanding)} remaining
       </span>
     </div>
   </div>
@@ -663,10 +706,35 @@ const outstandingPercentage =
                 </Select>
               </Field>
             </FormRow>
-            <FormRow>
-              <Field label="Progress (%)"><Input type="number" min={0} max={100} value={editForm.progress} onChange={e => setEditForm(f=>({...f,progress:Number(e.target.value)}))} /></Field>
-              <Field label="Due date"><Input type="date" value={editForm.dueDate} onChange={e => setEditForm(f=>({...f,dueDate:e.target.value}))} /></Field>
-            </FormRow>
+            <div className="grid grid-cols-1 gap-3">
+  <div className="rounded-md border border-line bg-vellum px-3 py-2.5">
+    <div className="text-[11px] text-muted">
+      Project progress
+    </div>
+
+    <div className="text-[12.5px] text-ink font-medium mt-0.5">
+      Automatically calculated from tasks and milestones
+    </div>
+
+    <div className="text-[10.5px] text-muted mt-0.5">
+      Update task completion or milestone status to change the
+      overall project progress.
+    </div>
+  </div>
+
+  <Field label="Due date">
+    <Input
+      type="date"
+      value={editForm.dueDate}
+      onChange={e =>
+        setEditForm(f => ({
+          ...f,
+          dueDate: e.target.value
+        }))
+      }
+    />
+  </Field>
+</div>
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => setEditOpen(false)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Save changes</button>

@@ -3,9 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { canAccessProject, isAdmin } from "@/lib/rbac";
 import { z } from "zod";
+import { calculateProjectProgress } from "@/lib/project-progress";
 
 const UpdateSchema = z.object({
   name: z.string().min(2).optional(),
+
   description: z.string().optional(),
 
   status: z
@@ -16,8 +18,6 @@ const UpdateSchema = z.object({
       "COMPLETED",
     ])
     .optional(),
-
-  progress: z.number().min(0).max(100).optional(),
 
   priority: z
     .enum(["LOW", "MEDIUM", "HIGH"])
@@ -81,6 +81,25 @@ export async function GET(
           phone: true,
         },
       },
+
+      tasks: {
+  select: {
+    id: true,
+    title: true,
+    weight: true,
+    completion: true,
+    status: true,
+  },
+},
+
+milestones: {
+  select: {
+    id: true,
+    title: true,
+    weight: true,
+    status: true,
+  },
+},
 
       supervisor: {
         select: {
@@ -200,7 +219,16 @@ export async function GET(
     );
   }
 
-  return NextResponse.json(project);
+  const calculatedProgress =
+  calculateProjectProgress({
+    tasks: project.tasks,
+    milestones: project.milestones,
+  });
+
+return NextResponse.json({
+  ...project,
+  progress: calculatedProgress,
+});
 }
 
 /*
@@ -387,10 +415,6 @@ export async function PATCH(
 
       ...(data.status !== undefined && {
         status: data.status,
-      }),
-
-      ...(data.progress !== undefined && {
-        progress: data.progress,
       }),
 
       ...(data.priority !== undefined && {
