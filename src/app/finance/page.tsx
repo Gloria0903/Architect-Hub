@@ -79,6 +79,14 @@ export default function FinancePage() {
     totalBudget > 0
       ? Math.min(Math.round((totalPaid / totalBudget) * 100), 100)
       : 0;
+  
+  const outstandingPercentage =
+  totalBudget > 0
+    ? Math.min(
+        Math.round((totalOutstanding / totalBudget) * 100),
+        100
+      )
+    : 0;    
 
   /*
    * --------------------------------------------------------------------------
@@ -214,39 +222,37 @@ export default function FinancePage() {
           </Card>
 
           {/* RECEIVED */}
-          <Card className="p-3.5">
-            <div className="text-muted text-[11px]">
-              Total received
-            </div>
+<Card className="p-3.5">
+  <div className="text-muted text-[11px]">
+    Total received
+  </div>
 
-            <div className="font-mono font-medium text-[17px] text-moss mt-1">
-              {formatKsh(totalPaid)}
-            </div>
+  <div className="font-mono font-medium text-[17px] text-moss mt-1">
+    {formatKsh(totalPaid)}
+  </div>
 
-            <div className="flex items-center gap-1 text-moss text-[11px] mt-1">
-              <TrendingUp size={12} />
-              {collectedPercentage}% collected
-            </div>
-          </Card>
+  <div className="flex items-center gap-1 text-moss text-[11px] mt-1">
+    <TrendingUp size={12} />
+    {collectedPercentage}% collected
+  </div>
+</Card>
 
           {/* OUTSTANDING */}
-          <Card className="p-3.5">
-            <div className="text-muted text-[11px]">
-              Outstanding
-            </div>
+<Card className="p-3.5">
+  <div className="text-muted text-[11px]">
+    Outstanding
+  </div>
 
-            <div className="font-mono font-medium text-[17px] text-brick mt-1">
-              {formatKsh(totalOutstanding)}
-            </div>
+  <div className="font-mono font-medium text-[17px] text-brick mt-1">
+    {formatKsh(totalOutstanding)}
+  </div>
 
-            <div className="flex items-center gap-1 text-brick text-[11px] mt-1">
-              <TrendingDown size={12} />
+  <div className="flex items-center gap-1 text-brick text-[11px] mt-1">
+    <TrendingDown size={12} />
 
-              {totalOutstanding > 0
-                ? "Awaiting payment"
-                : "Fully paid"}
-            </div>
-          </Card>
+    {outstandingPercentage}% outstanding
+  </div>
+</Card>
         </div>
 
         {/* ------------------------------------------------------------------ */}

@@ -72,10 +72,57 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   }
 
   function handlePayment(e: React.FormEvent) {
-    e.preventDefault();
-    addPayment({ projectId: project.id, amount: Number(payForm.amount), date: payForm.date, reference: payForm.reference, note: payForm.note });
-    setPayOpen(false); setPayForm({ amount: "", date: "", reference: "", note: "" });
+  e.preventDefault();
+
+  const amount = Number(payForm.amount);
+
+  if (!amount || amount <= 0) {
+    alert("Please enter a valid payment amount.");
+    return;
   }
+
+  if (!payForm.date) {
+    alert("Please select the payment date.");
+    return;
+  }
+
+  const currentOutstanding = Math.max(
+    Number(project.budget || 0) -
+      Number(project.paid || 0),
+    0
+  );
+
+  if (currentOutstanding <= 0) {
+    alert("This project has no outstanding balance.");
+    return;
+  }
+
+  if (amount > currentOutstanding) {
+    alert(
+      `Payment cannot exceed the outstanding contract balance of ${formatKsh(
+        currentOutstanding
+      )}.`
+    );
+    return;
+  }
+
+  addPayment({
+    projectId: project.id,
+    amount,
+    date: payForm.date,
+    reference: payForm.reference,
+    note: payForm.note,
+  });
+
+  setPayOpen(false);
+
+  setPayForm({
+    amount: "",
+    date: "",
+    reference: "",
+    note: "",
+  });
+}
 
   function handleEdit(e: React.FormEvent) {
     e.preventDefault();
@@ -109,7 +156,26 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     await removeDocument(docId);
   }
 
-  const outstanding = project.invoiced - project.paid;
+  const contractValue = Number(project.budget || 0);
+const invoiced = Number(project.invoiced || 0);
+const paid = Number(project.paid || 0);
+
+const outstanding = Math.max(contractValue - paid, 0);
+
+const invoicedPercentage =
+  contractValue > 0
+    ? Math.min(Math.round((invoiced / contractValue) * 100), 100)
+    : 0;
+
+const paidPercentage =
+  contractValue > 0
+    ? Math.min(Math.round((paid / contractValue) * 100), 100)
+    : 0;
+
+const outstandingPercentage =
+  contractValue > 0
+    ? Math.min(Math.round((outstanding / contractValue) * 100), 100)
+    : 0;
   const statusColor = project.status === "ON_TRACK" ? "#2F7A5E" : project.status === "AT_RISK" ? "#B07F1F" : "#B5502E";
 
   return (
@@ -202,20 +268,88 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               )}
             </Card>
             <Card className="p-4">
-              <div className="font-medium text-ink text-[13px] mb-2">Financial snapshot</div>
-              <div className="grid grid-cols-2 gap-3 text-[12px]">
-                <div><div className="text-muted mb-0.5">Contract value</div><div className="font-mono text-ink">{formatKsh(project.budget)}</div></div>
-                <div><div className="text-muted mb-0.5">Invoiced</div><div className="font-mono text-ink">{formatKsh(project.invoiced)}</div></div>
-                <div><div className="text-muted mb-0.5">Paid</div><div className="font-mono text-moss">{formatKsh(project.paid)}</div></div>
-                <div><div className="text-muted mb-0.5">Outstanding</div><div className="font-mono text-brick">{formatKsh(outstanding)}</div></div>
-              </div>
-              <div className="mt-3 pt-3 border-t border-line">
-                <div className="w-full h-2 bg-line rounded-full overflow-hidden">
-                  <div className="h-full bg-moss rounded-full" style={{ width: `${Math.round((project.paid / (project.invoiced||1)) * 100)}%` }} />
-                </div>
-                <div className="text-[11px] text-muted mt-1">{Math.round((project.paid/(project.invoiced||1))*100)}% of invoiced amount received</div>
-              </div>
-            </Card>
+  <div className="font-medium text-ink text-[13px] mb-2">
+    Financial snapshot
+  </div>
+
+  <div className="grid grid-cols-2 gap-3 text-[12px]">
+    <div>
+      <div className="text-muted mb-0.5">
+        Contract value
+      </div>
+      <div className="font-mono text-ink">
+        {formatKsh(contractValue)}
+      </div>
+    </div>
+
+    <div>
+      <div className="text-muted mb-0.5">
+        Invoiced
+      </div>
+      <div className="font-mono text-ink">
+        {formatKsh(invoiced)}
+      </div>
+      <div className="text-[10px] text-muted mt-0.5">
+        {invoicedPercentage}% of contract
+      </div>
+    </div>
+
+    <div>
+      <div className="text-muted mb-0.5">
+        Paid
+      </div>
+      <div className="font-mono text-moss">
+        {formatKsh(paid)}
+      </div>
+      <div className="text-[10px] text-moss mt-0.5">
+        {paidPercentage}% collected
+      </div>
+    </div>
+
+    <div>
+      <div className="text-muted mb-0.5">
+        Outstanding
+      </div>
+      <div className="font-mono text-brick">
+        {formatKsh(outstanding)}
+      </div>
+      <div className="text-[10px] text-brick mt-0.5">
+        {outstandingPercentage}% outstanding
+      </div>
+    </div>
+  </div>
+
+  <div className="mt-3 pt-3 border-t border-line">
+    <div className="flex items-center justify-between mb-1.5">
+      <span className="text-[11px] text-muted">
+        Payment progress
+      </span>
+
+      <span className="font-mono text-[11px] text-moss">
+        {paidPercentage}% collected
+      </span>
+    </div>
+
+    <div className="w-full h-2 bg-line rounded-full overflow-hidden">
+      <div
+        className="h-full bg-moss rounded-full transition-all"
+        style={{
+          width: `${paidPercentage}%`,
+        }}
+      />
+    </div>
+
+    <div className="flex items-center justify-between mt-1">
+      <span className="text-[10.5px] text-muted">
+        {formatKsh(paid)} received
+      </span>
+
+      <span className="text-[10.5px] text-brick">
+        {formatKsh(outstanding)} remaining
+      </span>
+    </div>
+  </div>
+</Card>
           </div>
         )}
 
@@ -330,37 +464,161 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
         {/* Finance */}
         {tab === "finance" && (
-          <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Card className="p-3.5"><div className="text-muted text-[11px]">Contract value</div><div className="font-mono font-medium text-[16px] text-ink mt-1">{formatKsh(project.budget)}</div></Card>
-              <Card className="p-3.5"><div className="text-muted text-[11px]">Invoiced</div><div className="font-mono font-medium text-[16px] text-ink mt-1">{formatKsh(project.invoiced)}</div></Card>
-              <Card className="p-3.5"><div className="text-muted text-[11px]">Paid</div><div className="font-mono font-medium text-[16px] text-moss mt-1">{formatKsh(project.paid)}</div></Card>
-              <Card className="p-3.5 cursor-pointer hover:border-moss transition-colors" onClick={() => setPayOpen(true)}>
-                <div className="text-muted text-[11px]">Outstanding</div>
-                <div className="font-mono font-medium text-[16px] text-brick mt-1">{formatKsh(outstanding)}</div>
-                <div className="text-[10.5px] text-moss mt-1">+ Record payment</div>
-              </Card>
-            </div>
-            <Card className="overflow-hidden">
-              <div className="px-4 py-3 border-b border-line flex items-center justify-between">
-                <div className="font-medium text-ink text-[12.5px]">Payment history</div>
-                <button onClick={() => setPayOpen(true)} className="text-[11.5px] text-moss font-medium">+ Record payment</button>
+  <div className="flex flex-col gap-3">
+
+    {/* FINANCIAL SUMMARY */}
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+
+      {/* CONTRACT */}
+      <Card className="p-3.5">
+        <div className="text-muted text-[11px]">
+          Contract value
+        </div>
+
+        <div className="font-mono font-medium text-[16px] text-ink mt-1">
+          {formatKsh(contractValue)}
+        </div>
+
+        <div className="text-[10.5px] text-muted mt-1">
+          100% contract value
+        </div>
+      </Card>
+
+      {/* INVOICED */}
+      <Card className="p-3.5">
+        <div className="text-muted text-[11px]">
+          Invoiced
+        </div>
+
+        <div className="font-mono font-medium text-[16px] text-ink mt-1">
+          {formatKsh(invoiced)}
+        </div>
+
+        <div className="text-[10.5px] text-blueprint mt-1">
+          {invoicedPercentage}% of contract
+        </div>
+      </Card>
+
+      {/* PAID */}
+      <Card className="p-3.5">
+        <div className="text-muted text-[11px]">
+          Paid
+        </div>
+
+        <div className="font-mono font-medium text-[16px] text-moss mt-1">
+          {formatKsh(paid)}
+        </div>
+
+        <div className="text-[10.5px] text-moss mt-1">
+          {paidPercentage}% collected
+        </div>
+      </Card>
+
+      {/* OUTSTANDING */}
+      <Card
+        className="p-3.5 cursor-pointer hover:border-moss transition-colors"
+        onClick={() => setPayOpen(true)}
+      >
+        <div className="text-muted text-[11px]">
+          Outstanding
+        </div>
+
+        <div className="font-mono font-medium text-[16px] text-brick mt-1">
+          {formatKsh(outstanding)}
+        </div>
+
+        <div className="text-[10.5px] text-brick mt-1">
+          {outstandingPercentage}% outstanding
+        </div>
+      </Card>
+
+    </div>
+
+    {/* PAYMENT PROGRESS */}
+    <Card className="p-4">
+
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-medium text-ink text-[12.5px]">
+          Payment progress
+        </div>
+
+        <div className="font-mono text-[11px] text-moss">
+          {paidPercentage}% collected
+        </div>
+      </div>
+
+      <div className="w-full h-2.5 bg-line rounded-full overflow-hidden">
+        <div
+          className="h-full bg-moss rounded-full transition-all"
+          style={{
+            width: `${paidPercentage}%`,
+          }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between mt-2">
+        <div className="text-[10.5px] text-muted">
+          Received: {formatKsh(paid)}
+        </div>
+
+        <div className="text-[10.5px] text-brick">
+          Outstanding: {formatKsh(outstanding)}
+        </div>
+      </div>
+
+    </Card>
+
+    {/* PAYMENT HISTORY */}
+    <Card className="overflow-hidden">
+
+      <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+
+        <div className="font-medium text-ink text-[12.5px]">
+          Payment history
+        </div>
+
+        <button
+          onClick={() => setPayOpen(true)}
+          className="text-[11.5px] text-moss font-medium"
+        >
+          + Record payment
+        </button>
+
+      </div>
+
+      {projectPayments.length === 0 ? (
+        <div className="p-6 text-center text-muted text-[12.5px]">
+          No payments recorded yet.
+        </div>
+      ) : (
+        projectPayments.map(pay => (
+          <div
+            key={pay.id}
+            className="px-4 py-3 border-t border-line flex items-center justify-between"
+          >
+            <div>
+              <div className="text-ink text-[12.5px] font-medium">
+                {pay.note || "Payment"}
               </div>
-              {projectPayments.length === 0
-                ? <div className="p-6 text-center text-muted text-[12.5px]">No payments recorded yet.</div>
-                : projectPayments.map(pay => (
-                  <div key={pay.id} className="px-4 py-3 border-t border-line flex items-center justify-between">
-                    <div>
-                      <div className="text-ink text-[12.5px] font-medium">{pay.note}</div>
-                      <div className="text-muted text-[11.5px] font-mono mt-0.5">{pay.reference} · {pay.date}{pay.recordedBy && ` · recorded by ${pay.recordedBy.name}`}</div>
-                    </div>
-                    <div className="font-mono text-moss font-medium">{formatKsh(pay.amount)}</div>
-                  </div>
-                ))
-              }
-            </Card>
+
+              <div className="text-muted text-[11.5px] font-mono mt-0.5">
+                {pay.reference || "No reference"} · {pay.date}
+                {pay.recordedBy &&
+                  ` · recorded by ${pay.recordedBy.name}`}
+              </div>
+            </div>
+
+            <div className="font-mono text-moss font-medium">
+              {formatKsh(pay.amount)}
+            </div>
           </div>
-        )}
+        ))
+      )}
+
+    </Card>
+
+  </div>
+)}
 
         {/* Reassign Modal */}
         <Modal open={reassignOpen} onClose={() => setReassignOpen(false)} title="Reassign project" subtitle="New architect gets instant access to all project history">
