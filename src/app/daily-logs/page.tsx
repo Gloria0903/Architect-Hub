@@ -6,10 +6,15 @@ import { Card } from "@/components/ui/card";
 import { useStore } from "@/store/app-store";
 import { Plus, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { useSession } from "next-auth/react";
 
 export default function DailyLogsPage() {
-  const { logs, projects, staff } = useStore();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+const { logs, projects, staff } = useStore();
+const { data: session } = useSession();
+
+const isAdmin = session?.user?.role === "ADMIN";
+
+const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterProject, setFilterProject] = useState("all");
   const [filterAuthor, setFilterAuthor] = useState("all");
 
@@ -37,15 +42,28 @@ export default function DailyLogsPage() {
         </div>
 
         {/* Missing logs alert */}
-        {missingToday.length > 0 && (
-          <div className="bg-brick-bg border border-brick/20 rounded-card p-3.5 mb-4 flex items-start gap-2.5">
-            <AlertTriangle size={16} className="text-brick mt-0.5 shrink-0" />
-            <div>
-              <div className="text-brick font-medium text-[12.5px]">{missingToday.length} staff {missingToday.length === 1 ? "has" : "have"} not submitted a log today</div>
-              <div className="text-[11.5px] text-brick/80 mt-0.5">{missingToday.map(m => m.name).join(", ")}</div>
-            </div>
-          </div>
-        )}
+        {isAdmin && missingToday.length > 0 && (
+  <div className="bg-brick-bg border border-brick/20 rounded-card p-3.5 mb-4 flex items-start gap-2.5">
+    <AlertTriangle
+      size={16}
+      className="text-brick mt-0.5 shrink-0"
+    />
+
+    <div>
+      <div className="text-brick font-medium text-[12.5px]">
+        {missingToday.length} staff{" "}
+        {missingToday.length === 1
+          ? "has"
+          : "have"}{" "}
+        not submitted a log today
+      </div>
+
+      <div className="text-[11.5px] text-brick/80 mt-0.5">
+        {missingToday.map((m) => m.name).join(", ")}
+      </div>
+    </div>
+  </div>
+)}
 
         {/* Filters */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">

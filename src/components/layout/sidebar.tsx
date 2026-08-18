@@ -63,9 +63,27 @@ export function Sidebar() {
       <SectionLabel>OPERATIONS</SectionLabel>
       {operations.map(i => <NavItem key={i.href} {...i} badge={i.href === "/daily-logs" ? todayLogs : undefined} />)}
       <SectionLabel>BUSINESS</SectionLabel>
-      <NavItem href="/finance" label="Finance" icon={Wallet} />
-      <NavItem href="/client-comms" label="Client comms" icon={MessageCircle} badge={unresolvedComments} />
-      <NavItem href="/activity" label="Activity timeline" icon={History} />
+
+{isAdmin && (
+  <NavItem
+    href="/finance"
+    label="Finance"
+    icon={Wallet}
+  />
+)}
+
+<NavItem
+  href="/client-comms"
+  label="Client comms"
+  icon={MessageCircle}
+  badge={unresolvedComments}
+/>
+
+<NavItem
+  href="/activity"
+  label="Activity timeline"
+  icon={History}
+/>
       <SectionLabel>TEAM</SectionLabel>
       {team.filter(i => isAdmin || i.href !== "/staff").map(i => <NavItem key={i.href} {...i} />)}
       <Link href="/projects" className="mt-auto bg-brick/[0.18] rounded-md p-2.5 hover:bg-brick/[0.28] transition-colors">

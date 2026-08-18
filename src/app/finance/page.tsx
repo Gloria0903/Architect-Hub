@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   Input,
   Select,
@@ -19,6 +21,28 @@ import {
 } from "lucide-react";
 
 export default function FinancePage() {
+  const router = useRouter();
+
+const {
+  data: session,
+  status,
+} = useSession();
+
+const isAdmin = session?.user?.role === "ADMIN";
+
+useEffect(() => {
+  if (status === "authenticated" && !isAdmin) {
+    router.replace("/dashboard");
+  }
+}, [status, isAdmin, router]);
+
+if (status === "loading") {
+  return null;
+}
+
+if (!session || !isAdmin) {
+  return null;
+}
   const {
     projects,
     clients,
