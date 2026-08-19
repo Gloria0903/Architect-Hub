@@ -630,23 +630,32 @@ export function AppProvider({
 
   /*
    * Prevent multiple refresh calls from executing
-   * simultaneously.
+   * simultaneously. If a call comes in while one is already
+   * running, we don't just hand back the in-flight promise as-is —
+   * that promise may have been *started* before this caller's own
+   * mutation (e.g. an avatar or document upload) finished writing to
+   * the server, so its snapshot would be stale by the time it
+   * resolves. Instead we mark `refreshQueued` and guarantee a fresh
+   * follow-up run starts the moment the current one finishes, so
+   * every caller is guaranteed data fetched *after* their own write.
    */
   const refreshInFlight =
     useRef<Promise<void> | null>(null);
+  const refreshQueued = useRef(false);
 
   // ─── Refresh all staff data ───────────────────────────────────────────────
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<void> => {
     if (!isStaffSession) {
       return;
     }
 
     if (refreshInFlight.current) {
+      refreshQueued.current = true;
       return refreshInFlight.current;
     }
 
-    const refreshPromise = (async () => {
+    const runOnce = (): Promise<void> => (async () => {
       try {
         setState((s) => ({
           ...s,
@@ -737,15 +746,27 @@ export function AppProvider({
           loading: false,
           error: message,
         }));
-      } finally {
-        refreshInFlight.current = null;
       }
     })();
 
-    refreshInFlight.current =
-      refreshPromise;
+    const promise = runOnce().then(() => {
+      // If another caller asked for a refresh while this run was in
+      // flight, their write may have landed after our fetch started —
+      // run once more immediately so they get a fresh snapshot instead
+      // of silently keeping whatever we just fetched.
+      if (refreshQueued.current) {
+        refreshQueued.current = false;
+        refreshInFlight.current = runOnce().finally(() => {
+          refreshInFlight.current = null;
+        });
+        return refreshInFlight.current;
+      }
+      refreshInFlight.current = null;
+    });
 
-    return refreshPromise;
+    refreshInFlight.current = promise;
+
+    return promise;
   }, [isStaffSession]);
 
   // ─── Initial data load ────────────────────────────────────────────────────
@@ -1440,6 +1461,19 @@ export function AppProvider({
         throw new Error(message);
       }
 
+      // Patch local state immediately from the response so the new
+      // photo shows up right away, instead of waiting on the full
+      // 8-endpoint refresh() round-trip. refresh() below still runs
+      // to reconcile everything else, but the photo itself no longer
+      // depends on its timing.
+      const updated = (await res.json()) as { id: string; avatarUrl: string | null };
+      setState((s) => ({
+        ...s,
+        staff: s.staff.map((member) =>
+          member.id === updated.id ? { ...member, avatarUrl: updated.avatarUrl } : member
+        ),
+      }));
+
       await refresh();
     },
     [refresh]
@@ -1455,9 +1489,19 @@ export function AppProvider({
           }
         );
 
+        const myId = session?.user?.id;
+        if (myId) {
+          setState((s) => ({
+            ...s,
+            staff: s.staff.map((member) =>
+              member.id === myId ? { ...member, avatarUrl: null } : member
+            ),
+          }));
+        }
+
         await refresh();
       },
-      [refresh]
+      [refresh, session?.user?.id]
     );
 
   // ─── Provider ─────────────────────────────────────────────────────────────
