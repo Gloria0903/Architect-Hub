@@ -56,7 +56,7 @@ describe("validateDocumentUpload", () => {
       sizeBytes: 1024,
     });
     expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/isn't supported/i);
+    expect(result.error).toMatch(/not allowed for security reasons/i);
   });
 
   it("rejects octet-stream unless the filename has a known CAD/Revit extension", () => {
