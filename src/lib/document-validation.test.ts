@@ -79,10 +79,10 @@ describe("validateDocumentUpload", () => {
     const result = validateDocumentUpload({
       fileName: "huge.pdf",
       mimeType: "application/pdf",
-      sizeBytes: 51 * 1024 * 1024,
+      sizeBytes: 101 * 1024 * 1024,
     });
     expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/under 50MB/);
+    expect(result.error).toMatch(/under 100MB/);
   });
 
   it("rejects empty files", () => {
