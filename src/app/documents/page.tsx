@@ -1,31 +1,97 @@
 "use client";
 
-import { useState, useRef } from "react";
+import {
+  useRef,
+  useState,
+} from "react";
+
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
-import { useStore, formatFileSize } from "@/store/app-store";
+
 import {
-  FileText,
-  File,
-  ImageIcon,
-  Upload,
+  formatFileSize,
+  useStore,
+} from "@/store/app-store";
+
+import {
+  Archive,
   Download,
-  Trash2,
+  File,
+  FileText,
+  Film,
+  ImageIcon,
   Loader2,
+  Trash2,
+  Upload,
 } from "lucide-react";
 
-const typeIcon: Record<string, React.ReactNode> = {
-  pdf: <FileText size={16} className="text-brick" />,
-  dwg: <File size={16} className="text-blueprint" />,
-  xlsx: <FileText size={16} className="text-moss" />,
-  image: <ImageIcon size={16} className="text-ochre" />,
-  default: <FileText size={16} className="text-muted" />,
+const typeIcon: Record<
+  string,
+  React.ReactNode
+> = {
+  pdf: (
+    <FileText
+      size={16}
+      className="text-brick"
+    />
+  ),
+
+  dwg: (
+    <File
+      size={16}
+      className="text-blueprint"
+    />
+  ),
+
+  xlsx: (
+    <FileText
+      size={16}
+      className="text-moss"
+    />
+  ),
+
+  image: (
+    <ImageIcon
+      size={16}
+      className="text-ochre"
+    />
+  ),
+
+  archive: (
+    <Archive
+      size={16}
+      className="text-muted"
+    />
+  ),
+
+  video: (
+    <Film
+      size={16}
+      className="text-muted"
+    />
+  ),
+
+  default: (
+    <FileText
+      size={16}
+      className="text-muted"
+    />
+  ),
 };
 
-function iconFor(mimeType: string, name: string) {
-  const lowerName = name.toLowerCase();
+function iconFor(
+  mimeType: string,
+  name: string
+) {
+  const lowerName =
+    name.toLowerCase();
 
-  if (mimeType.startsWith("image/")) {
+  if (
+    mimeType.startsWith("image/") ||
+    /\.(png|jpg|jpeg|webp|gif|tif|tiff|bmp|svg)$/i.test(
+      lowerName
+    )
+  ) {
     return typeIcon.image;
   }
 
@@ -37,24 +103,109 @@ function iconFor(mimeType: string, name: string) {
   }
 
   if (
-    lowerName.endsWith(".dwg") ||
-    lowerName.endsWith(".dxf") ||
-    lowerName.endsWith(".rvt")
+    /\.(dwg|dxf|rvt|rfa|rte|skp|ifc|ifczip|dgn|3dm)$/i.test(
+      lowerName
+    )
   ) {
     return typeIcon.dwg;
   }
 
   if (
     mimeType.includes("sheet") ||
-    lowerName.endsWith(".xlsx") ||
-    lowerName.endsWith(".xls") ||
-    lowerName.endsWith(".csv")
+    /\.(xlsx|xls|csv)$/i.test(
+      lowerName
+    )
   ) {
     return typeIcon.xlsx;
   }
 
+  if (
+    /\.(zip|rar|7z)$/i.test(
+      lowerName
+    )
+  ) {
+    return typeIcon.archive;
+  }
+
+  if (
+    mimeType.startsWith("video/") ||
+    /\.(mp4|mov|webm)$/i.test(
+      lowerName
+    )
+  ) {
+    return typeIcon.video;
+  }
+
   return typeIcon.default;
 }
+
+/**
+ * Client-side file filter.
+ *
+ * IMPORTANT:
+ * This is only a UI-level filter.
+ * The API must still perform the real validation/security checks.
+ */
+const ACCEPTED_FILE_TYPES = [
+  ".pdf",
+
+  // CAD / BIM
+  ".dwg",
+  ".dxf",
+  ".rvt",
+  ".rfa",
+  ".rte",
+  ".skp",
+  ".ifc",
+  ".ifczip",
+  ".dgn",
+  ".3dm",
+
+  // Adobe / design
+  ".ai",
+  ".eps",
+  ".psd",
+
+  // Images
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
+  ".tif",
+  ".tiff",
+  ".bmp",
+  ".svg",
+
+  // Documents
+  ".doc",
+  ".docx",
+  ".txt",
+  ".rtf",
+
+  // Spreadsheets
+  ".xls",
+  ".xlsx",
+  ".csv",
+
+  // Presentations
+  ".ppt",
+  ".pptx",
+
+  // Archives
+  ".zip",
+  ".rar",
+  ".7z",
+
+  // Data
+  ".json",
+  ".xml",
+
+  // Video
+  ".mp4",
+  ".mov",
+  ".webm",
+].join(",");
 
 export default function DocumentsPage() {
   const {
@@ -64,43 +215,101 @@ export default function DocumentsPage() {
     removeDocument,
   } = useStore();
 
-  const [filterProject, setFilterProject] = useState("all");
-  const [uploadProject, setUploadProject] = useState("");
-  const [dragging, setDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
+  /**
+   * Current document list filter.
+   *
+   * "all" means show documents from all projects.
+   */
+  const [
+    filterProject,
+    setFilterProject,
+  ] = useState("all");
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  /**
+   * Project that new uploads should belong to.
+   *
+   * Kept separate from filterProject so selecting an upload
+   * destination doesn't unexpectedly change the document list.
+   */
+  const [
+    uploadProject,
+    setUploadProject,
+  ] = useState("");
 
+  const [
+    dragging,
+    setDragging,
+  ] = useState(false);
+
+  const [
+    uploading,
+    setUploading,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState("");
+
+  const [
+    success,
+    setSuccess,
+  ] = useState("");
+
+  const fileInputRef =
+    useRef<HTMLInputElement>(null);
+
+  /**
+   * Documents currently visible in the table.
+   */
   const visible =
     filterProject === "all"
       ? documents
-      : documents.filter((file) => file.projectId === filterProject);
+      : documents.filter(
+          (file) =>
+            file.projectId ===
+            filterProject
+        );
 
   /**
-   * Open the native file picker.
+   * Open the browser's file picker.
    */
   function openFilePicker() {
-    if (uploading) return;
+    if (uploading) {
+      return;
+    }
 
     setError("");
+    setSuccess("");
 
-    // Reset the input first so selecting the same file again
-    // still triggers onChange.
     if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+      /**
+       * Reset the input so selecting the same file again
+       * still triggers onChange.
+       */
+      fileInputRef.current.value =
+        "";
+
       fileInputRef.current.click();
     }
   }
 
   /**
-   * Upload selected files.
+   * Upload one or more files.
    */
-  async function handleFiles(list: FileList | null) {
+  async function handleFiles(
+    list: FileList | null
+  ) {
     if (!list || list.length === 0) {
       return;
     }
 
+    /**
+     * If the current document filter is a specific project,
+     * use that project automatically.
+     *
+     * Otherwise use the project selected in "Upload to project".
+     */
     const targetProject =
       filterProject !== "all"
         ? filterProject
@@ -113,33 +322,131 @@ export default function DocumentsPage() {
       return;
     }
 
+    const files =
+      Array.from(list);
+
+    if (files.length === 0) {
+      return;
+    }
+
     setError("");
+    setSuccess("");
     setUploading(true);
 
+    const failedFiles: string[] = [];
+    const successfulFiles: string[] =
+      [];
+
     try {
-      const files = Array.from(list);
-
       for (const file of files) {
-        console.log("Uploading file:", {
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          projectId: targetProject,
-        });
+        try {
+          console.log(
+            "[Documents] Starting upload:",
+            {
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              projectId:
+                targetProject,
+            }
+          );
 
-        await uploadDocument(
-          targetProject,
-          file,
-          "OTHER"
-        );
+          /**
+           * IMPORTANT:
+           *
+           * Do not upload directly to S3 from this component.
+           *
+           * uploadDocument() handles:
+           *
+           * Documents page
+           *      ↓
+           * app-store
+           *      ↓
+           * /api/documents
+           *      ↓
+           * validation/security
+           *      ↓
+           * storage.ts
+           *      ↓
+           * S3 or local storage
+           */
+          await uploadDocument(
+            targetProject,
+            file,
+            "OTHER"
+          );
+
+          successfulFiles.push(
+            file.name
+          );
+
+          console.log(
+            "[Documents] Upload successful:",
+            file.name
+          );
+        } catch (fileError) {
+          console.error(
+            `[Documents] Failed to upload ${file.name}:`,
+            fileError
+          );
+
+          failedFiles.push(
+            file.name
+          );
+        }
       }
 
-      console.log("Upload completed successfully.");
+      /**
+       * Show a useful result after all files have been attempted.
+       */
+      if (failedFiles.length > 0) {
+        if (
+          successfulFiles.length > 0
+        ) {
+          setError(
+            `Uploaded ${successfulFiles.length} ${
+              successfulFiles.length === 1
+                ? "file"
+                : "files"
+            }, but failed to upload: ${failedFiles.join(
+              ", "
+            )}`
+          );
+        } else if (
+          failedFiles.length === 1
+        ) {
+          setError(
+            `Failed to upload "${failedFiles[0]}".`
+          );
+        } else {
+          setError(
+            `Failed to upload ${failedFiles.length} files: ${failedFiles.join(
+              ", "
+            )}`
+          );
+        }
 
-      // Keep the project selected after upload.
-      // Refresh is already handled inside uploadDocument().
+        return;
+      }
+
+      if (
+        successfulFiles.length > 0
+      ) {
+        setSuccess(
+          successfulFiles.length === 1
+            ? `"${successfulFiles[0]}" uploaded successfully.`
+            : `${successfulFiles.length} files uploaded successfully.`
+        );
+      }
     } catch (e) {
-      console.error("Document upload failed:", e);
+      /**
+       * This is a final safety net.
+       * Individual file failures are already handled above.
+       */
+      console.error(
+        "[Documents] Upload process failed:",
+        e
+      );
 
       setError(
         e instanceof Error
@@ -148,16 +455,23 @@ export default function DocumentsPage() {
       );
     } finally {
       setUploading(false);
+
+      /**
+       * Clear the input after processing.
+       * This allows the same file to be selected again.
+       */
+      if (fileInputRef.current) {
+        fileInputRef.current.value =
+          "";
+      }
     }
   }
 
-  /**
-   * File input change handler.
-   */
   function handleFileInputChange(
     e: React.ChangeEvent<HTMLInputElement>
   ) {
-    const files = e.target.files;
+    const files =
+      e.target.files;
 
     if (!files || files.length === 0) {
       return;
@@ -166,20 +480,25 @@ export default function DocumentsPage() {
     void handleFiles(files);
   }
 
-  /**
-   * Drag & drop handlers.
-   */
   function handleDragOver(
     e: React.DragEvent<HTMLDivElement>
   ) {
     e.preventDefault();
+    e.stopPropagation();
 
-    if (!uploading) {
-      setDragging(true);
+    if (uploading) {
+      return;
     }
+
+    setDragging(true);
   }
 
-  function handleDragLeave() {
+  function handleDragLeave(
+    e: React.DragEvent<HTMLDivElement>
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+
     setDragging(false);
   }
 
@@ -187,36 +506,65 @@ export default function DocumentsPage() {
     e: React.DragEvent<HTMLDivElement>
   ) {
     e.preventDefault();
+    e.stopPropagation();
+
     setDragging(false);
 
     if (uploading) {
       return;
     }
 
-    void handleFiles(e.dataTransfer.files);
+    void handleFiles(
+      e.dataTransfer.files
+    );
   }
 
-  /**
-   * Delete document.
-   */
+  function handleDropZoneKeyDown(
+    e: React.KeyboardEvent<HTMLDivElement>
+  ) {
+    if (uploading) {
+      return;
+    }
+
+    if (
+      e.key === "Enter" ||
+      e.key === " "
+    ) {
+      e.preventDefault();
+      openFilePicker();
+    }
+  }
+
   async function handleDelete(
     id: string,
     name: string
   ) {
-    if (
-      !confirm(
-        `Delete "${name}"?\n\nThis cannot be undone.`
-      )
-    ) {
+    if (uploading) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete "${name}"?\n\nThis cannot be undone.`
+    );
+
+    if (!confirmed) {
       return;
     }
 
     try {
       setError("");
+      setSuccess("");
 
       await removeDocument(id);
+
+      setSuccess(
+        `"${name}" deleted successfully.`
+      );
     } catch (e) {
-      console.error("Document deletion failed:", e);
+      console.error(
+        "[Documents] Document deletion failed:",
+        e
+      );
 
       setError(
         e instanceof Error
@@ -232,6 +580,7 @@ export default function DocumentsPage() {
         {/* ─────────────────────────────────────────────
             HEADER
         ───────────────────────────────────────────── */}
+
         <div className="flex items-center justify-between mb-5">
           <div>
             <h1 className="font-display font-bold text-[20px] text-ink">
@@ -239,8 +588,9 @@ export default function DocumentsPage() {
             </h1>
 
             <p className="text-muted text-[12px] mt-0.5">
-              DWG, DXF, Revit, PDF, images, BOQs,
-              contracts and reports
+              Drawings, CAD/BIM files,
+              BOQs, contracts, reports,
+              images and project media
             </p>
           </div>
 
@@ -256,48 +606,54 @@ export default function DocumentsPage() {
                   size={15}
                   className="animate-spin"
                 />
+
                 Uploading...
               </>
             ) : (
               <>
                 <Upload size={15} />
+
                 Upload files
               </>
             )}
           </button>
 
-          {/* IMPORTANT:
-              This input is intentionally hidden.
-              The button and drop zone both trigger it.
-          */}
           <input
             ref={fileInputRef}
             type="file"
             multiple
-            className="hidden"
-            accept=".pdf,.dwg,.dxf,.rvt,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.ppt,.pptx,.doc,.docx"
-            onChange={handleFileInputChange}
+            hidden
+            accept={
+              ACCEPTED_FILE_TYPES
+            }
+            onChange={
+              handleFileInputChange
+            }
           />
         </div>
 
         {/* ─────────────────────────────────────────────
-            PROJECT SELECTION
+            UPLOAD PROJECT
         ───────────────────────────────────────────── */}
+
         <div className="mb-3">
-          <label className="text-[11px] text-muted mr-2">
+          <label
+            htmlFor="upload-project"
+            className="text-[11px] text-muted mr-2"
+          >
             Upload to project:
           </label>
 
           <select
-            value={
-              filterProject !== "all"
-                ? filterProject
-                : uploadProject
-            }
+            id="upload-project"
+            value={uploadProject}
             onChange={(e) => {
-              setUploadProject(e.target.value);
-              setFilterProject(e.target.value);
+              setUploadProject(
+                e.target.value
+              );
+
               setError("");
+              setSuccess("");
             }}
             disabled={uploading}
             className="border border-line rounded-md px-2.5 py-1.5 text-[12px] bg-surface outline-none disabled:opacity-60"
@@ -306,36 +662,39 @@ export default function DocumentsPage() {
               Select a project...
             </option>
 
-            {projects.map((project) => (
-              <option
-                key={project.id}
-                value={project.id}
-              >
-                {project.sheetNo} — {project.name}
-              </option>
-            ))}
+            {projects.map(
+              (project) => (
+                <option
+                  key={project.id}
+                  value={project.id}
+                >
+                  {project.sheetNo} —{" "}
+                  {project.name}
+                </option>
+              )
+            )}
           </select>
         </div>
 
         {/* ─────────────────────────────────────────────
-            DROP ZONE
+            DRAG & DROP
         ───────────────────────────────────────────── */}
+
         <div
-          onClick={openFilePicker}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (
-              e.key === "Enter" ||
-              e.key === " "
-            ) {
-              e.preventDefault();
+          onClick={() => {
+            if (!uploading) {
               openFilePicker();
             }
           }}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onKeyDown={
+            handleDropZoneKeyDown
+          }
+          role="button"
+          tabIndex={uploading ? -1 : 0}
+          aria-disabled={uploading}
           className={`
             border-2
             border-dashed
@@ -344,16 +703,15 @@ export default function DocumentsPage() {
             text-center
             mb-4
             transition-colors
-            cursor-pointer
+            ${
+              uploading
+                ? "opacity-60 cursor-not-allowed"
+                : "cursor-pointer"
+            }
             ${
               dragging
                 ? "border-blueprint bg-blueprint-bg"
                 : "border-line bg-surface hover:border-blueprint/40"
-            }
-            ${
-              uploading
-                ? "opacity-60 cursor-not-allowed"
-                : ""
             }
           `}
         >
@@ -365,11 +723,12 @@ export default function DocumentsPage() {
               />
 
               <div className="text-ink font-medium text-[13px]">
-                Uploading file...
+                Uploading files...
               </div>
 
               <p className="text-muted text-[12px] mt-1">
-                Please wait while the file is uploaded.
+                Please wait while the
+                files are uploaded.
               </p>
             </>
           ) : (
@@ -393,8 +752,18 @@ export default function DocumentsPage() {
               </div>
 
               <p className="text-muted text-[12px] mt-1">
-                or click to browse — DWG, DXF, RVT,
-                PDF, images, XLSX accepted (up to 50MB)
+                or click to browse
+              </p>
+
+              <p className="text-muted text-[11px] mt-2">
+                CAD/BIM • PDF • Office •
+                Images • Archives • Site
+                videos
+              </p>
+
+              <p className="text-muted text-[11px] mt-1">
+                Files up to 250MB depending
+                on file type
               </p>
             </>
           )}
@@ -403,8 +772,12 @@ export default function DocumentsPage() {
         {/* ─────────────────────────────────────────────
             ERROR
         ───────────────────────────────────────────── */}
+
         {error && (
-          <div className="border border-brick/30 bg-brick/5 rounded-md p-3 mb-4">
+          <div
+            role="alert"
+            className="border border-brick/30 bg-brick/5 rounded-md p-3 mb-4"
+          >
             <p className="text-brick text-[12px]">
               {error}
             </p>
@@ -412,21 +785,56 @@ export default function DocumentsPage() {
         )}
 
         {/* ─────────────────────────────────────────────
+            SUCCESS
+        ───────────────────────────────────────────── */}
+
+        {success && (
+          <div
+            role="status"
+            className="border border-moss/30 bg-moss/5 rounded-md p-3 mb-4"
+          >
+            <p className="text-moss text-[12px]">
+              {success}
+            </p>
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────
             FILTER
         ───────────────────────────────────────────── */}
+
         <div className="flex items-center gap-2 mb-4">
+          <label
+            htmlFor="filter-project"
+            className="sr-only"
+          >
+            Filter documents by project
+          </label>
+
           <select
+            id="filter-project"
             value={filterProject}
             onChange={(e) => {
-              setFilterProject(e.target.value);
+              const value =
+                e.target.value;
 
-              // Keep upload target synchronized with
-              // the selected project.
-              if (e.target.value !== "all") {
-                setUploadProject(e.target.value);
+              setFilterProject(value);
+
+              /**
+               * When filtering to a specific project,
+               * automatically make it the upload destination too.
+               *
+               * Returning to "All projects" does not erase the
+               * previously selected upload project.
+               */
+              if (value !== "all") {
+                setUploadProject(
+                  value
+                );
               }
 
               setError("");
+              setSuccess("");
             }}
             className="border border-line rounded-md px-2.5 py-1.5 text-[12px] bg-surface outline-none"
           >
@@ -434,14 +842,17 @@ export default function DocumentsPage() {
               All projects
             </option>
 
-            {projects.map((project) => (
-              <option
-                key={project.id}
-                value={project.id}
-              >
-                {project.sheetNo} — {project.name}
-              </option>
-            ))}
+            {projects.map(
+              (project) => (
+                <option
+                  key={project.id}
+                  value={project.id}
+                >
+                  {project.sheetNo} —{" "}
+                  {project.name}
+                </option>
+              )
+            )}
           </select>
 
           <span className="ml-auto text-[11px] text-muted font-mono">
@@ -455,112 +866,138 @@ export default function DocumentsPage() {
         {/* ─────────────────────────────────────────────
             DOCUMENT TABLE
         ───────────────────────────────────────────── */}
+
         <Card className="overflow-hidden">
           {visible.length === 0 ? (
             <div className="p-8 text-center text-muted text-[12.5px]">
-              No documents yet. Upload one above
-              to get started.
+              No documents yet. Upload
+              one above to get started.
             </div>
           ) : (
-            <table className="w-full border-collapse text-[12px]">
-              <thead className="bg-vellum">
-                <tr className="text-muted text-left">
-                  <th className="font-medium px-4 py-2.5">
-                    File
-                  </th>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[12px]">
+                <thead className="bg-vellum">
+                  <tr className="text-muted text-left">
+                    <th className="font-medium px-4 py-2.5">
+                      File
+                    </th>
 
-                  <th className="font-medium px-4 py-2.5">
-                    Project
-                  </th>
+                    <th className="font-medium px-4 py-2.5">
+                      Project
+                    </th>
 
-                  <th className="font-medium px-4 py-2.5">
-                    Size
-                  </th>
+                    <th className="font-medium px-4 py-2.5">
+                      Size
+                    </th>
 
-                  <th className="font-medium px-4 py-2.5">
-                    Uploaded
-                  </th>
+                    <th className="font-medium px-4 py-2.5">
+                      Uploaded
+                    </th>
 
-                  <th className="font-medium px-4 py-2.5 text-right">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {visible.map((file) => (
-                  <tr
-                    key={file.id}
-                    className="border-t border-line hover:bg-vellum/40 transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        {iconFor(
-                          file.mimeType,
-                          file.name
-                        )}
-
-                        <span className="text-ink font-medium truncate max-w-[300px]">
-                          {file.name}
-                        </span>
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-3 font-mono text-[11px] text-muted">
-                      {file.project?.sheetNo ||
-                        "—"}{" "}
-                      —{" "}
-                      {file.project?.name ||
-                        "Unknown project"}
-                    </td>
-
-                    <td className="px-4 py-3 font-mono text-[11px] text-muted">
-                      {formatFileSize(
-                        file.fileSize
-                      )}
-                    </td>
-
-                    <td className="px-4 py-3 font-mono text-[11px] text-muted">
-                      {new Date(
-                        file.uploadedAt
-                      ).toLocaleDateString()}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-3">
-                        {/* DOWNLOAD */}
-                        <a
-                          href={
-                            file.fileUrl ||
-                            `/api/documents/${file.id}`
-                          }
-                          download={file.name}
-                          className="text-blueprint hover:text-blueprint/70"
-                          title="Download"
-                        >
-                          <Download size={15} />
-                        </a>
-
-                        {/* DELETE */}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleDelete(
-                              file.id,
-                              file.name
-                            )
-                          }
-                          className="text-muted hover:text-brick"
-                          title="Delete"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
+                    <th className="font-medium px-4 py-2.5 text-right">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+
+                <tbody>
+                  {visible.map(
+                    (file) => (
+                      <tr
+                        key={file.id}
+                        className="border-t border-line hover:bg-vellum/40 transition-colors"
+                      >
+                        {/* FILE */}
+
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {iconFor(
+                              file.mimeType,
+                              file.name
+                            )}
+
+                            <span className="text-ink font-medium truncate max-w-[300px]">
+                              {file.name}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* PROJECT */}
+
+                        <td className="px-4 py-3 font-mono text-[11px] text-muted">
+                          {file.project
+                            ?.sheetNo ||
+                            "—"}{" "}
+                          —{" "}
+                          {file.project
+                            ?.name ||
+                            "Unknown project"}
+                        </td>
+
+                        {/* SIZE */}
+
+                        <td className="px-4 py-3 font-mono text-[11px] text-muted">
+                          {formatFileSize(
+                            file.fileSize
+                          )}
+                        </td>
+
+                        {/* DATE */}
+
+                        <td className="px-4 py-3 font-mono text-[11px] text-muted">
+                          {new Date(
+                            file.uploadedAt
+                          ).toLocaleDateString()}
+                        </td>
+
+                        {/* ACTIONS */}
+
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-3">
+                            <a
+                              href={
+                                file.fileUrl ||
+                                `/api/documents/${file.id}`
+                              }
+                              download={
+                                file.name
+                              }
+                              className="text-blueprint hover:text-blueprint/70"
+                              title="Download"
+                              aria-label={`Download ${file.name}`}
+                            >
+                              <Download
+                                size={15}
+                              />
+                            </a>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleDelete(
+                                  file.id,
+                                  file.name
+                                )
+                              }
+                              disabled={
+                                uploading
+                              }
+                              className="text-muted hover:text-brick disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete"
+                              aria-label={`Delete ${file.name}`}
+                            >
+                              <Trash2
+                                size={15}
+                              />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
       </div>
