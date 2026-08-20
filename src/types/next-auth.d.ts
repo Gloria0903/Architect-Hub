@@ -8,8 +8,17 @@ declare module "next-auth" {
       id: string;
       role: AppRole;
       initials: string;
-      // Only set when role === "CLIENT" — the Client record this portal
-      // login belongs to. Staff sessions never have this.
+
+      /**
+       * True when an administrator-created staff account
+       * must change its temporary password before continuing.
+       */
+      mustResetPassword: boolean;
+
+      /**
+       * Only set when role === "CLIENT".
+       * Staff sessions never have this field.
+       */
       clientId?: string;
     } & DefaultSession["user"];
   }
@@ -17,6 +26,13 @@ declare module "next-auth" {
   interface User {
     role: AppRole;
     initials: string;
+
+    /**
+     * Forces a newly-created staff member to change
+     * their temporary password.
+     */
+    mustResetPassword?: boolean;
+
     clientId?: string;
   }
 }
@@ -26,6 +42,12 @@ declare module "next-auth/jwt" {
     id: string;
     role: AppRole;
     initials: string;
+
+    /**
+     * Persist password-reset requirement in the JWT.
+     */
+    mustResetPassword: boolean;
+
     clientId?: string;
   }
 }

@@ -4,9 +4,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import {
-  validatePassword,
-} from "@/lib/password-policy";
+import { validatePassword } from "@/lib/password-policy";
 import {
   rateLimit,
   getClientIp,
@@ -15,11 +13,11 @@ import {
 const Schema = z.object({
   currentPassword: z
     .string()
-    .min(1),
+    .min(1, "Current password is required."),
 
   newPassword: z
     .string()
-    .min(1),
+    .min(1, "New password is required."),
 });
 
 export async function POST(
@@ -43,10 +41,17 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "Too many requests. Try again later.",
+          "Too many password-change attempts. Please try again later.",
       },
       {
         status: 429,
+        headers: {
+          "Retry-After": String(
+            Math.ceil(
+              limited.retryAfterMs / 1000
+            )
+          ),
+        },
       }
     );
   }
@@ -125,9 +130,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          passwordCheck.errors.join(
-            " "
-          ),
+          passwordCheck.errors.join(" "),
       },
       {
         status: 400,
@@ -149,9 +152,11 @@ export async function POST(
 
       select: {
         id: true,
+        email: true,
         password: true,
         mustResetPassword: true,
         isActive: true,
+        lockedUntil: true,
       },
     });
 
@@ -163,6 +168,26 @@ export async function POST(
       },
       {
         status: 401,
+      }
+    );
+  }
+
+  /*
+   * Do not allow a locked account to change its password.
+   */
+
+  if (
+    user.lockedUntil &&
+    user.lockedUntil.getTime() >
+      Date.now()
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Account is temporarily locked. Please try again later.",
+      },
+      {
+        status: 423,
       }
     );
   }
@@ -217,7 +242,7 @@ export async function POST(
 
   /*
    * ---------------------------------------------------------------
-   * HASH NEW PASSWORD
+   * HASH PASSWORD
    * ---------------------------------------------------------------
    */
 
@@ -231,35 +256,59 @@ export async function POST(
    * ---------------------------------------------------------------
    * UPDATE ACCOUNT
    * ---------------------------------------------------------------
+   *
+   * This is the critical operation.
+   *
+   * Once the temporary password has been replaced:
+   *
+   *   mustResetPassword = false
+   *
+   * which releases the user from the forced reset state.
    */
 
-  await prisma.user.update({
-    where: {
-      id: user.id,
-    },
+  const updatedUser =
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
 
-    data: {
-      password: hashedPassword,
+      data: {
+        password: hashedPassword,
 
-      /*
-       * This is what releases a newly-created staff account
-       * from the forced password-change state.
-       */
-      mustResetPassword: false,
+        mustResetPassword: false,
 
-      passwordChangedAt:
-        new Date(),
+        passwordChangedAt:
+          new Date(),
 
-      failedLoginAttempts: 0,
+        failedLoginAttempts: 0,
 
-      lockedUntil: null,
-    },
-  });
+        lockedUntil: null,
+      },
+
+      select: {
+        id: true,
+        email: true,
+        mustResetPassword: true,
+      },
+    });
+
+  /*
+   * ---------------------------------------------------------------
+   * RESPONSE
+   * ---------------------------------------------------------------
+   */
 
   return NextResponse.json({
     success: true,
 
     message:
       "Password changed successfully.",
+
+    user: {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      mustResetPassword:
+        updatedUser.mustResetPassword,
+    },
   });
 }

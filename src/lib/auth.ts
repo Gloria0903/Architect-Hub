@@ -6,156 +6,439 @@ import type { AppRole } from "@/types/next-auth";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
+
 const DEFAULT_SESSION_SECONDS = 8 * 60 * 60; // 8 hours
 const REMEMBER_ME_SESSION_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 class MfaRequiredError extends CredentialsSignin {
   code = "MFA_REQUIRED";
 }
+
 class AccountLockedError extends CredentialsSignin {
   code = "ACCOUNT_LOCKED";
 }
+
 class AccountInactiveError extends CredentialsSignin {
   code = "ACCOUNT_INACTIVE";
 }
 
-async function logLoginEvent(userId: string | null, success: boolean, reason: string) {
+/**
+ * Records authentication events without ever allowing audit logging
+ * to break the authentication flow.
+ */
+async function logLoginEvent(
+  userId: string | null,
+  success: boolean,
+  reason: string
+) {
   try {
-    await prisma.loginEvent.create({ data: { userId: userId ?? undefined, success, reason } });
+    await prisma.loginEvent.create({
+      data: {
+        userId: userId ?? undefined,
+        success,
+        reason,
+      },
+    });
   } catch {
-    // Never let audit logging break the login flow itself.
+    // Never let audit logging break login.
   }
 }
 
 /**
- * Client Portal login. Deliberately a separate, simpler path from staff
- * auth above: no MFA, no failed-attempt lockout counters (Client has none
- * of those columns — see prisma/schema.prisma), and no LoginEvent audit
- * row, since that table's userId FK points at User, not Client. A client
- * only gets in if an admin has both set a password AND flipped
- * `portalEnabled` on for them (see /clients UI + /api/clients/[id]/portal).
+ * Client Portal login.
+ *
+ * This remains deliberately separate from staff authentication:
+ *
+ * - no MFA
+ * - no staff failed-attempt lockout
+ * - no staff LoginEvent
+ * - requires portalEnabled
+ * - requires a client password
  */
-async function authorizeClientPortal(email: string, password: string) {
-  const client = await prisma.client.findFirst({ where: { email } });
-  if (!client || !client.portalEnabled || !client.passwordHash) return null;
+async function authorizeClientPortal(
+  email: string,
+  password: string
+) {
+  const client = await prisma.client.findFirst({
+    where: {
+      email,
+    },
+  });
 
-  const passwordValid = await bcrypt.compare(password, client.passwordHash);
-  if (!passwordValid) return null;
+  if (
+    !client ||
+    !client.portalEnabled ||
+    !client.passwordHash
+  ) {
+    return null;
+  }
 
-  await prisma.client.update({ where: { id: client.id }, data: { lastPortalLoginAt: new Date() } });
+  const passwordValid = await bcrypt.compare(
+    password,
+    client.passwordHash
+  );
+
+  if (!passwordValid) {
+    return null;
+  }
+
+  await prisma.client.update({
+    where: {
+      id: client.id,
+    },
+    data: {
+      lastPortalLoginAt: new Date(),
+    },
+  });
 
   return {
     id: client.id,
     name: client.contactPerson,
     email: client.email,
     role: "CLIENT" as const,
+
     initials: client.contactPerson
       .split(" ")
-      .map((p: string) => p[0])
+      .map((part: string) => part[0])
       .slice(0, 2)
       .join("")
       .toUpperCase(),
+
     clientId: client.id,
+
+    /*
+     * Client accounts never use the staff first-login
+     * password-reset mechanism.
+     */
+    mustResetPassword: false,
   };
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const {
+  handlers,
+  auth,
+  signIn,
+  signOut,
+} = NextAuth({
   secret: process.env.AUTH_SECRET,
-  session: { strategy: "jwt", maxAge: DEFAULT_SESSION_SECONDS },
-  pages: { signIn: "/login" },
+
+  session: {
+    strategy: "jwt",
+    maxAge: DEFAULT_SESSION_SECONDS,
+  },
+
+  pages: {
+    signIn: "/login",
+  },
+
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({
+      token,
+      user,
+    }) {
       if (user) {
         token.id = user.id as string;
+
         token.role = user.role;
+
         token.initials = user.initials;
-        token.clientId = (user as { clientId?: string }).clientId;
-        const remember = (user as { remember?: boolean }).remember;
+
+        token.clientId = (
+          user as {
+            clientId?: string;
+          }
+        ).clientId;
+
+        /*
+         * Keep mustResetPassword in the JWT so the application
+         * can force a newly-created staff member to change the
+         * temporary password before accessing the rest of the app.
+         */
+        token.mustResetPassword = (
+          user as {
+            mustResetPassword?: boolean;
+          }
+        ).mustResetPassword ?? false;
+
+        const remember = (
+          user as {
+            remember?: boolean;
+          }
+        ).remember;
+
         if (remember) {
-          token.exp = Math.floor(Date.now() / 1000) + REMEMBER_ME_SESSION_SECONDS;
+          token.exp =
+            Math.floor(Date.now() / 1000) +
+            REMEMBER_ME_SESSION_SECONDS;
         }
       }
+
       return token;
     },
-    async session({ session, token }) {
+
+    async session({
+      session,
+      token,
+    }) {
       if (token) {
         session.user.id = token.id as string;
-        session.user.role = token.role as AppRole;
-        session.user.initials = token.initials as string;
-        session.user.clientId = token.clientId as string | undefined;
+
+        session.user.role =
+          token.role as AppRole;
+
+        session.user.initials =
+          token.initials as string;
+
+        session.user.clientId =
+          token.clientId as string | undefined;
+
+        session.user.mustResetPassword =
+          Boolean(token.mustResetPassword);
       }
+
       return session;
     },
   },
+
   providers: [
     Credentials({
       name: "credentials",
+
       credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-        mfaCode: { label: "MFA Code", type: "text" },
-        rememberMe: { label: "Remember me", type: "text" },
+        email: {
+          label: "Email",
+          type: "email",
+        },
+
+        password: {
+          label: "Password",
+          type: "password",
+        },
+
+        mfaCode: {
+          label: "MFA Code",
+          type: "text",
+        },
+
+        rememberMe: {
+          label: "Remember me",
+          type: "text",
+        },
       },
+
       async authorize(credentials) {
-        const email = (credentials?.email as string | undefined)?.trim().toLowerCase();
-        const password = credentials?.password as string | undefined;
-        if (!email || !password) return null;
+        const email = (
+          credentials?.email as
+            | string
+            | undefined
+        )
+          ?.trim()
+          .toLowerCase();
 
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) {
-          // No staff account with this email — check the Client Portal
-          // before giving up. Kept as a fully separate code path (own
-          // password check, no MFA, no lockout counters) so client-portal
-          // access can never be mistaken for a staff account or vice versa.
-          return authorizeClientPortal(email, password);
-        }
+        const password =
+          credentials?.password as
+            | string
+            | undefined;
 
-        // Account lockout check
-        if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
-          await logLoginEvent(user.id, false, "locked");
-          throw new AccountLockedError();
-        }
-
-        if (!user.isActive) {
-          await logLoginEvent(user.id, false, "inactive");
-          throw new AccountInactiveError();
-        }
-
-        const passwordValid = await bcrypt.compare(password, user.password);
-        if (!passwordValid) {
-          const attempts = user.failedLoginAttempts + 1;
-          const shouldLock = attempts >= MAX_FAILED_ATTEMPTS;
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              failedLoginAttempts: shouldLock ? 0 : attempts,
-              lockedUntil: shouldLock ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000) : null,
-            },
-          });
-          await logLoginEvent(user.id, false, shouldLock ? "locked_out" : "bad_password");
-          if (shouldLock) throw new AccountLockedError();
+        if (!email || !password) {
           return null;
         }
 
-        // Password correct — check MFA before granting a session
-        if (user.mfaEnabled && user.mfaSecret) {
-          const code = (credentials?.mfaCode as string) || "";
+        /*
+         * ---------------------------------------------------------------
+         * STAFF ACCOUNT
+         * ---------------------------------------------------------------
+         */
+
+        const user =
+          await prisma.user.findUnique({
+            where: {
+              email,
+            },
+          });
+
+        /*
+         * ---------------------------------------------------------------
+         * CLIENT PORTAL FALLBACK
+         * ---------------------------------------------------------------
+         *
+         * If there is no staff account with this email, check the
+         * separate Client Portal authentication path.
+         */
+
+        if (!user) {
+          return authorizeClientPortal(
+            email,
+            password
+          );
+        }
+
+        /*
+         * ---------------------------------------------------------------
+         * ACCOUNT LOCKOUT
+         * ---------------------------------------------------------------
+         */
+
+        if (
+          user.lockedUntil &&
+          user.lockedUntil.getTime() >
+            Date.now()
+        ) {
+          await logLoginEvent(
+            user.id,
+            false,
+            "locked"
+          );
+
+          throw new AccountLockedError();
+        }
+
+        /*
+         * ---------------------------------------------------------------
+         * ACCOUNT ACTIVE CHECK
+         * ---------------------------------------------------------------
+         */
+
+        if (!user.isActive) {
+          await logLoginEvent(
+            user.id,
+            false,
+            "inactive"
+          );
+
+          throw new AccountInactiveError();
+        }
+
+        /*
+         * ---------------------------------------------------------------
+         * PASSWORD VERIFICATION
+         * ---------------------------------------------------------------
+         */
+
+        const passwordValid =
+          await bcrypt.compare(
+            password,
+            user.password
+          );
+
+        if (!passwordValid) {
+          const attempts =
+            user.failedLoginAttempts + 1;
+
+          const shouldLock =
+            attempts >=
+            MAX_FAILED_ATTEMPTS;
+
+          await prisma.user.update({
+            where: {
+              id: user.id,
+            },
+
+            data: {
+              failedLoginAttempts:
+                shouldLock
+                  ? 0
+                  : attempts,
+
+              lockedUntil:
+                shouldLock
+                  ? new Date(
+                      Date.now() +
+                        LOCKOUT_MINUTES *
+                          60 *
+                          1000
+                    )
+                  : null,
+            },
+          });
+
+          await logLoginEvent(
+            user.id,
+            false,
+            shouldLock
+              ? "locked_out"
+              : "bad_password"
+          );
+
+          if (shouldLock) {
+            throw new AccountLockedError();
+          }
+
+          return null;
+        }
+
+        /*
+         * ---------------------------------------------------------------
+         * MFA
+         * ---------------------------------------------------------------
+         */
+
+        if (
+          user.mfaEnabled &&
+          user.mfaSecret
+        ) {
+          const code =
+            (credentials?.mfaCode as string) ||
+            "";
+
           if (!code) {
             throw new MfaRequiredError();
           }
-          const { authenticator } = await import("otplib");
-          const valid = authenticator.verify({ token: code, secret: user.mfaSecret });
+
+          const {
+            authenticator,
+          } = await import(
+            "otplib"
+          );
+
+          const valid =
+            authenticator.verify({
+              token: code,
+              secret: user.mfaSecret,
+            });
+
           if (!valid) {
-            await logLoginEvent(user.id, false, "bad_mfa");
+            await logLoginEvent(
+              user.id,
+              false,
+              "bad_mfa"
+            );
+
             return null;
           }
         }
 
+        /*
+         * ---------------------------------------------------------------
+         * SUCCESSFUL AUTHENTICATION
+         * ---------------------------------------------------------------
+         *
+         * We deliberately allow the session to be created even when
+         * mustResetPassword is true.
+         *
+         * The flag is included in the JWT/session and the application
+         * forces the user through the password-change screen.
+         */
+
         await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null },
+          where: {
+            id: user.id,
+          },
+
+          data: {
+            lastLoginAt: new Date(),
+            failedLoginAttempts: 0,
+            lockedUntil: null,
+          },
         });
-        await logLoginEvent(user.id, true, "success");
+
+        await logLoginEvent(
+          user.id,
+          true,
+          user.mustResetPassword
+            ? "success_password_reset_required"
+            : "success"
+        );
 
         return {
           id: user.id,
@@ -163,7 +446,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           role: user.role,
           initials: user.initials,
-          remember: (credentials?.rememberMe as string) === "true",
+
+          remember:
+            (credentials?.rememberMe as string) ===
+            "true",
+
+          mustResetPassword:
+            user.mustResetPassword,
         };
       },
     }),
