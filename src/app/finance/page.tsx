@@ -23,26 +23,27 @@ import {
 export default function FinancePage() {
   const router = useRouter();
 
-const {
-  data: session,
-  status,
-} = useSession();
+  const {
+    data: session,
+    status,
+  } = useSession();
 
-const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin =
+    session?.user?.role === "ADMIN";
 
-useEffect(() => {
-  if (status === "authenticated" && !isAdmin) {
-    router.replace("/dashboard");
-  }
-}, [status, isAdmin, router]);
+  useEffect(() => {
+    if (
+      status === "authenticated" &&
+      !isAdmin
+    ) {
+      router.replace("/dashboard");
+    }
+  }, [
+    status,
+    isAdmin,
+    router,
+  ]);
 
-if (status === "loading") {
-  return null;
-}
-
-if (!session || !isAdmin) {
-  return null;
-}
   const {
     projects,
     clients,
@@ -50,67 +51,297 @@ if (!session || !isAdmin) {
     addPayment,
   } = useStore();
 
-  const [open, setOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [open, setOpen] =
+    useState(false);
 
-  const [form, setForm] = useState({
-    projectId: "",
-    amount: "",
-    date: "",
-    reference: "",
-    note: "",
-  });
+  const [
+    selectedProject,
+    setSelectedProject,
+  ] = useState<string | null>(null);
+
+  const [form, setForm] =
+    useState({
+      projectId: "",
+      amount: "",
+      date: "",
+      reference: "",
+      note: "",
+    });
+
+  /*
+   * --------------------------------------------------------------------------
+   * AUTHENTICATION GUARD
+   * --------------------------------------------------------------------------
+   */
+
+  if (status === "loading") {
+    return null;
+  }
+
+  if (!session || !isAdmin) {
+    return null;
+  }
+
+  /*
+   * --------------------------------------------------------------------------
+   * FINANCIAL CALCULATION HELPERS
+   * --------------------------------------------------------------------------
+   *
+   * These calculations are intentionally centralized so that the Finance
+   * page does not use different formulas in different places.
+   *
+   * CONTRACT VALUE
+   * = project.budget
+   *
+   * INVOICED
+   * = project.invoiced
+   *
+   * PAID
+   * = project.paid
+   *
+   * OUTSTANDING RECEIVABLE
+   * = invoiced - paid
+   *
+   * UNINVOICED
+   * = budget - invoiced
+   *
+   * REMAINING CONTRACT VALUE
+   * = budget - paid
+   *
+   * IMPORTANT:
+   *
+   * Outstanding receivable and remaining contract value are NOT the same
+   * thing when invoicing is tracked separately.
+   * --------------------------------------------------------------------------
+   */
+
+  function getContractValue(
+    project: {
+      budget?: number | null;
+    }
+  ) {
+    return Math.max(
+      Number(project.budget ?? 0),
+      0
+    );
+  }
+
+  function getInvoiced(
+    project: {
+      invoiced?: number | null;
+    }
+  ) {
+    return Math.max(
+      Number(project.invoiced ?? 0),
+      0
+    );
+  }
+
+  function getPaid(
+    project: {
+      paid?: number | null;
+    }
+  ) {
+    return Math.max(
+      Number(project.paid ?? 0),
+      0
+    );
+  }
+
+  /*
+   * Amount that has been invoiced but has NOT yet been paid.
+   */
+  function getOutstanding(
+    project: {
+      invoiced?: number | null;
+      paid?: number | null;
+    }
+  ) {
+    const invoiced =
+      getInvoiced(project);
+
+    const paid =
+      getPaid(project);
+
+    return Math.max(
+      invoiced - paid,
+      0
+    );
+  }
+
+  /*
+   * Contract value that has not yet been invoiced.
+   */
+  function getUninvoiced(
+    project: {
+      budget?: number | null;
+      invoiced?: number | null;
+    }
+  ) {
+    const contract =
+      getContractValue(project);
+
+    const invoiced =
+      getInvoiced(project);
+
+    return Math.max(
+      contract - invoiced,
+      0
+    );
+  }
+
+  /*
+   * Total contract value that has not yet been collected.
+   *
+   * This includes both:
+   *
+   * 1. invoiced but unpaid
+   * 2. not yet invoiced
+   */
+  function getRemainingContractValue(
+    project: {
+      budget?: number | null;
+      paid?: number | null;
+    }
+  ) {
+    const contract =
+      getContractValue(project);
+
+    const paid =
+      getPaid(project);
+
+    return Math.max(
+      contract - paid,
+      0
+    );
+  }
 
   /*
    * --------------------------------------------------------------------------
    * FINANCIAL TOTALS
-   *
-   * Contract value = project.budget
-   * Paid          = project.paid
-   * Outstanding   = contract value - paid
-   *
-   * We intentionally do NOT use invoiced for outstanding because the current
-   * project creation flow does not have an invoice entry mechanism yet.
    * --------------------------------------------------------------------------
    */
 
-  const totalBudget = projects.reduce(
-    (sum, project) => sum + Number(project.budget || 0),
-    0
-  );
+  const totalBudget =
+    projects.reduce(
+      (sum, project) =>
+        sum +
+        getContractValue(project),
+      0
+    );
 
-  const totalInvoiced = projects.reduce(
-    (sum, project) => sum + Number(project.invoiced || 0),
-    0
-  );
+  const totalInvoiced =
+    projects.reduce(
+      (sum, project) =>
+        sum +
+        getInvoiced(project),
+      0
+    );
 
-  const totalPaid = projects.reduce(
-    (sum, project) => sum + Number(project.paid || 0),
-    0
-  );
+  const totalPaid =
+    projects.reduce(
+      (sum, project) =>
+        sum +
+        getPaid(project),
+      0
+    );
 
-  const totalOutstanding = Math.max(
-    totalBudget - totalPaid,
-    0
-  );
+  /*
+   * Actual accounts receivable:
+   *
+   * INVOICED - PAID
+   */
+  const totalOutstanding =
+    Math.max(
+      totalInvoiced -
+        totalPaid,
+      0
+    );
 
+  /*
+   * Contract value that has not yet been invoiced.
+   */
+  const totalUninvoiced =
+    Math.max(
+      totalBudget -
+        totalInvoiced,
+      0
+    );
+
+  /*
+   * Total contract value that has not yet been collected.
+   *
+   * This is useful for the contract-level picture, but it is intentionally
+   * NOT called "Outstanding" because that would confuse it with receivables.
+   */
+  const totalRemainingContract =
+    Math.max(
+      totalBudget -
+        totalPaid,
+      0
+    );
+
+  /*
+   * Percentage of total contract value that has been invoiced.
+   */
   const invoicedPercentage =
     totalBudget > 0
-      ? Math.min(Math.round((totalInvoiced / totalBudget) * 100), 100)
+      ? Math.min(
+          Math.round(
+            (totalInvoiced /
+              totalBudget) *
+              100
+          ),
+          100
+        )
       : 0;
 
+  /*
+   * Percentage of total contract value collected.
+   */
   const collectedPercentage =
     totalBudget > 0
-      ? Math.min(Math.round((totalPaid / totalBudget) * 100), 100)
+      ? Math.min(
+          Math.round(
+            (totalPaid /
+              totalBudget) *
+              100
+          ),
+          100
+        )
       : 0;
-  
+
+  /*
+   * Percentage of invoiced amounts that have been collected.
+   *
+   * This is the more meaningful collection percentage for receivables.
+   */
+  const collectionOfInvoicedPercentage =
+    totalInvoiced > 0
+      ? Math.min(
+          Math.round(
+            (totalPaid /
+              totalInvoiced) *
+              100
+          ),
+          100
+        )
+      : 0;
+
+  /*
+   * Outstanding receivables as a percentage of invoiced value.
+   */
   const outstandingPercentage =
-  totalBudget > 0
-    ? Math.min(
-        Math.round((totalOutstanding / totalBudget) * 100),
-        100
-      )
-    : 0;    
+    totalInvoiced > 0
+      ? Math.min(
+          Math.round(
+            (totalOutstanding /
+              totalInvoiced) *
+              100
+          ),
+          100
+        )
+      : 0;
 
   /*
    * --------------------------------------------------------------------------
@@ -118,54 +349,96 @@ if (!session || !isAdmin) {
    * --------------------------------------------------------------------------
    */
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(
+    e: React.FormEvent
+  ) {
     e.preventDefault();
 
-    const amount = Number(form.amount);
+    const amount =
+      Number(form.amount);
 
-    if (!form.projectId || !amount || amount <= 0) {
+    if (
+      !form.projectId ||
+      !amount ||
+      amount <= 0
+    ) {
       return;
     }
 
-    const project = projects.find(
-      (project) => project.id === form.projectId
-    );
+    const project =
+      projects.find(
+        (project) =>
+          project.id ===
+          form.projectId
+      );
 
     if (!project) {
+      alert(
+        "The selected project could not be found."
+      );
       return;
     }
 
-    const outstanding = Math.max(
-      Number(project.budget || 0) - Number(project.paid || 0),
-      0
-    );
+    /*
+     * IMPORTANT:
+     *
+     * Payment is now checked against the amount actually invoiced and not
+     * merely against the total contract budget.
+     *
+     * This keeps the Finance UI aligned with the payment API.
+     */
+    const outstanding =
+      getOutstanding(project);
+
+    if (outstanding <= 0) {
+      alert(
+        "This project has no outstanding invoiced balance."
+      );
+      return;
+    }
 
     if (amount > outstanding) {
       alert(
-        `Payment cannot exceed the outstanding contract balance of ${formatKsh(
+        `Payment cannot exceed the outstanding invoiced balance of ${formatKsh(
           outstanding
         )}.`
       );
       return;
     }
 
-    addPayment({
-      projectId: form.projectId,
-      amount,
-      date: form.date,
-      reference: form.reference,
-      note: form.note,
-    });
+    try {
+      await addPayment({
+        projectId:
+          form.projectId,
+        amount,
+        date: form.date,
+        reference:
+          form.reference.trim(),
+        note:
+          form.note.trim(),
+      });
 
-    setOpen(false);
+      setOpen(false);
 
-    setForm({
-      projectId: "",
-      amount: "",
-      date: "",
-      reference: "",
-      note: "",
-    });
+      setForm({
+        projectId: "",
+        amount: "",
+        date: "",
+        reference: "",
+        note: "",
+      });
+    } catch (error) {
+      console.error(
+        "Failed to record payment:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to record payment."
+      );
+    }
   }
 
   /*
@@ -174,11 +447,20 @@ if (!session || !isAdmin) {
    * --------------------------------------------------------------------------
    */
 
-  const projectPayments = selectedProject
-    ? payments.filter(
-        (payment) => payment.projectId === selectedProject
-      )
-    : payments;
+  const projectPayments =
+    selectedProject
+      ? payments.filter(
+          (payment) =>
+            payment.projectId ===
+            selectedProject
+        )
+      : payments;
+
+  /*
+   * --------------------------------------------------------------------------
+   * RENDER
+   * --------------------------------------------------------------------------
+   */
 
   return (
     <AppShell>
@@ -199,7 +481,9 @@ if (!session || !isAdmin) {
           </div>
 
           <button
-            onClick={() => setOpen(true)}
+            onClick={() =>
+              setOpen(true)
+            }
             className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90"
           >
             <Plus size={15} />
@@ -214,69 +498,104 @@ if (!session || !isAdmin) {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
 
           {/* CONTRACT VALUE */}
+
           <Card className="p-3.5">
             <div className="text-muted text-[11px]">
               Total contract value
             </div>
 
             <div className="font-mono font-medium text-[17px] text-ink mt-1">
-              {formatKsh(totalBudget)}
+              {formatKsh(
+                totalBudget
+              )}
             </div>
 
             <div className="flex items-center gap-1 text-blueprint text-[11px] mt-1">
               <TrendingUp size={12} />
+
               {projects.length}{" "}
-              {projects.length === 1 ? "contract" : "contracts"}
+              {projects.length ===
+              1
+                ? "contract"
+                : "contracts"}
             </div>
           </Card>
 
           {/* INVOICED */}
+
           <Card className="p-3.5">
             <div className="text-muted text-[11px]">
               Total invoiced
             </div>
 
             <div className="font-mono font-medium text-[17px] text-ink mt-1">
-              {formatKsh(totalInvoiced)}
+              {formatKsh(
+                totalInvoiced
+              )}
             </div>
 
             <div className="text-muted text-[11px] mt-1">
-              {invoicedPercentage}% of contracts
+              {invoicedPercentage}% of contract value
+            </div>
+
+            <div className="text-muted text-[10px] mt-0.5">
+              Uninvoiced:{" "}
+              {formatKsh(
+                totalUninvoiced
+              )}
             </div>
           </Card>
 
           {/* RECEIVED */}
-<Card className="p-3.5">
-  <div className="text-muted text-[11px]">
-    Total received
-  </div>
 
-  <div className="font-mono font-medium text-[17px] text-moss mt-1">
-    {formatKsh(totalPaid)}
-  </div>
+          <Card className="p-3.5">
+            <div className="text-muted text-[11px]">
+              Total received
+            </div>
 
-  <div className="flex items-center gap-1 text-moss text-[11px] mt-1">
-    <TrendingUp size={12} />
-    {collectedPercentage}% collected
-  </div>
-</Card>
+            <div className="font-mono font-medium text-[17px] text-moss mt-1">
+              {formatKsh(
+                totalPaid
+              )}
+            </div>
+
+            <div className="flex items-center gap-1 text-moss text-[11px] mt-1">
+              <TrendingUp size={12} />
+
+              {collectedPercentage}% of contract
+            </div>
+
+            <div className="text-muted text-[10px] mt-0.5">
+              {collectionOfInvoicedPercentage}% of invoiced
+            </div>
+          </Card>
 
           {/* OUTSTANDING */}
-<Card className="p-3.5">
-  <div className="text-muted text-[11px]">
-    Outstanding
-  </div>
 
-  <div className="font-mono font-medium text-[17px] text-brick mt-1">
-    {formatKsh(totalOutstanding)}
-  </div>
+          <Card className="p-3.5">
+            <div className="text-muted text-[11px]">
+              Outstanding receivable
+            </div>
 
-  <div className="flex items-center gap-1 text-brick text-[11px] mt-1">
-    <TrendingDown size={12} />
+            <div className="font-mono font-medium text-[17px] text-brick mt-1">
+              {formatKsh(
+                totalOutstanding
+              )}
+            </div>
 
-    {outstandingPercentage}% outstanding
-  </div>
-</Card>
+            <div className="flex items-center gap-1 text-brick text-[11px] mt-1">
+              <TrendingDown size={12} />
+
+              {outstandingPercentage}% of invoiced
+            </div>
+
+            <div className="text-muted text-[10px] mt-0.5">
+              Remaining contract:{" "}
+              {formatKsh(
+                totalRemainingContract
+              )}
+            </div>
+          </Card>
         </div>
 
         {/* ------------------------------------------------------------------ */}
@@ -286,6 +605,7 @@ if (!session || !isAdmin) {
         <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3">
 
           {/* PROJECT FINANCIAL SUMMARY */}
+
           <Card className="overflow-hidden">
 
             <div className="px-4 py-3 border-b border-line font-medium text-ink text-[12.5px]">
@@ -320,124 +640,216 @@ if (!session || !isAdmin) {
 
                     <th className="font-medium px-4 py-2.5">
                     </th>
-
                   </tr>
                 </thead>
 
                 <tbody>
 
-                  {projects.map((project) => {
+                  {projects.map(
+                    (project) => {
+                      const contractValue =
+                        getContractValue(
+                          project
+                        );
 
-                    const contractValue = Number(
-                      project.budget || 0
-                    );
+                      const invoiced =
+                        getInvoiced(
+                          project
+                        );
 
-                    const invoiced = Number(
-                      project.invoiced || 0
-                    );
+                      const paid =
+                        getPaid(
+                          project
+                        );
 
-                    const paid = Number(
-                      project.paid || 0
-                    );
+                      /*
+                       * Outstanding = invoiced - paid.
+                       */
+                      const outstanding =
+                        getOutstanding(
+                          project
+                        );
 
-                    const outstanding = Math.max(
-                      contractValue - paid,
-                      0
-                    );
+                      /*
+                       * Amount of contract not yet invoiced.
+                       */
+                      const uninvoiced =
+                        getUninvoiced(
+                          project
+                        );
 
-                    const paymentPercentage =
-                      contractValue > 0
-                        ? Math.min(
-                            Math.round(
-                              (paid / contractValue) * 100
-                            ),
-                            100
-                          )
-                        : 0;
+                      /*
+                       * Total amount of contract not yet collected.
+                       */
+                      const remainingContract =
+                        getRemainingContractValue(
+                          project
+                        );
 
-                    const client = clients.find(
-                      (c) => c.id === project.clientId
-                    );
+                      /*
+                       * Payment progress against the total contract value.
+                       */
+                      const paymentPercentage =
+                        contractValue >
+                        0
+                          ? Math.min(
+                              Math.round(
+                                (paid /
+                                  contractValue) *
+                                  100
+                              ),
+                              100
+                            )
+                          : 0;
 
-                    return (
-                      <tr
-                        key={project.id}
-                        className={`border-t border-line hover:bg-vellum/40 cursor-pointer transition-colors ${
-                          selectedProject === project.id
-                            ? "bg-blueprint-bg/30"
-                            : ""
-                        }`}
-                        onClick={() =>
-                          setSelectedProject(
-                            selectedProject === project.id
-                              ? null
-                              : project.id
-                          )
-                        }
-                      >
+                      /*
+                       * Collection percentage against invoiced value.
+                       */
+                      const collectionPercentage =
+                        invoiced > 0
+                          ? Math.min(
+                              Math.round(
+                                (paid /
+                                  invoiced) *
+                                  100
+                              ),
+                              100
+                            )
+                          : 0;
 
-                        {/* PROJECT */}
-                        <td className="px-4 py-3">
+                      const client =
+                        clients.find(
+                          (c) =>
+                            c.id ===
+                            project.clientId
+                        );
 
-                          <div className="text-ink font-medium">
-                            {project.name}
-                          </div>
+                      return (
+                        <tr
+                          key={
+                            project.id
+                          }
+                          className={`border-t border-line hover:bg-vellum/40 cursor-pointer transition-colors ${
+                            selectedProject ===
+                            project.id
+                              ? "bg-blueprint-bg/30"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            setSelectedProject(
+                              selectedProject ===
+                                project.id
+                                ? null
+                                : project.id
+                            )
+                          }
+                        >
 
-                          <div className="text-muted text-[11px] font-mono">
-                            {project.sheetNo} ·{" "}
-                            {client?.name || "No client"}
-                          </div>
+                          {/* PROJECT */}
 
-                        </td>
+                          <td className="px-4 py-3">
 
-                        {/* CONTRACT */}
-                        <td className="px-4 py-3 text-right font-mono text-[11px]">
-                          {formatKsh(contractValue)}
-                        </td>
+                            <div className="text-ink font-medium">
+                              {
+                                project.name
+                              }
+                            </div>
 
-                        {/* INVOICED */}
-                        <td className="px-4 py-3 text-right font-mono text-[11px]">
-                          {formatKsh(invoiced)}
-                        </td>
+                            <div className="text-muted text-[11px] font-mono">
+                              {
+                                project.sheetNo
+                              }{" "}
+                              ·{" "}
+                              {client?.name ||
+                                "No client"}
+                            </div>
 
-                        {/* PAID */}
-                        <td className="px-4 py-3 text-right font-mono text-[11px] text-moss">
-                          {formatKsh(paid)}
-                        </td>
+                          </td>
 
-                        {/* OUTSTANDING */}
-                        <td className="px-4 py-3 text-right font-mono text-[11px] text-brick">
-                          {formatKsh(outstanding)}
-                        </td>
+                          {/* CONTRACT */}
 
-                        {/* PROGRESS */}
-                        <td className="px-4 py-3">
+                          <td className="px-4 py-3 text-right font-mono text-[11px]">
+                            {formatKsh(
+                              contractValue
+                            )}
+                          </td>
 
-                          <div className="w-16 h-1.5 bg-line rounded-full overflow-hidden ml-auto">
+                          {/* INVOICED */}
 
-                            <div
-                              className="h-full bg-moss rounded-full"
-                              style={{
-                                width: `${paymentPercentage}%`,
-                              }}
-                            />
+                          <td className="px-4 py-3 text-right font-mono text-[11px]">
+                            {formatKsh(
+                              invoiced
+                            )}
 
-                          </div>
+                            <div className="text-[9px] text-muted mt-0.5">
+                              Unbilled:{" "}
+                              {formatKsh(
+                                uninvoiced
+                              )}
+                            </div>
+                          </td>
 
-                        </td>
+                          {/* PAID */}
 
-                      </tr>
-                    );
-                  })}
+                          <td className="px-4 py-3 text-right font-mono text-[11px] text-moss">
+                            {formatKsh(
+                              paid
+                            )}
+
+                            <div className="text-[9px] text-muted mt-0.5">
+                              {paymentPercentage}% of contract
+                            </div>
+                          </td>
+
+                          {/* OUTSTANDING */}
+
+                          <td className="px-4 py-3 text-right font-mono text-[11px] text-brick">
+                            {formatKsh(
+                              outstanding
+                            )}
+
+                            <div className="text-[9px] text-muted mt-0.5">
+                              {collectionPercentage}% collected
+                            </div>
+                          </td>
+
+                          {/* PROGRESS */}
+
+                          <td className="px-4 py-3">
+
+                            <div className="w-16 h-1.5 bg-line rounded-full overflow-hidden ml-auto">
+
+                              <div
+                                className="h-full bg-moss rounded-full"
+                                style={{
+                                  width: `${paymentPercentage}%`,
+                                }}
+                              />
+
+                            </div>
+
+                            <div className="text-[9px] text-muted text-right mt-1">
+                              Remaining:{" "}
+                              {formatKsh(
+                                remainingContract
+                              )}
+                            </div>
+
+                          </td>
+
+                        </tr>
+                      );
+                    }
+                  )}
 
                 </tbody>
-
               </table>
             </div>
 
           </Card>
 
           {/* PAYMENT HISTORY */}
+
           <Card className="overflow-hidden">
 
             <div className="px-4 py-3 border-b border-line flex items-center justify-between">
@@ -448,7 +860,11 @@ if (!session || !isAdmin) {
 
               {selectedProject && (
                 <button
-                  onClick={() => setSelectedProject(null)}
+                  onClick={() =>
+                    setSelectedProject(
+                      null
+                    )
+                  }
                   className="text-[11px] text-muted hover:text-ink"
                 >
                   Clear filter
@@ -459,7 +875,8 @@ if (!session || !isAdmin) {
 
             <div className="divide-y divide-line max-h-96 overflow-y-auto">
 
-              {projectPayments.length === 0 ? (
+              {projectPayments.length ===
+              0 ? (
 
                 <div className="p-6 text-center text-muted text-[12.5px]">
                   No payments recorded yet.
@@ -467,49 +884,58 @@ if (!session || !isAdmin) {
 
               ) : (
 
-                projectPayments.map((payment) => {
+                projectPayments.map(
+                  (payment) => {
+                    const project =
+                      projects.find(
+                        (p) =>
+                          p.id ===
+                          payment.projectId
+                      );
 
-                  const project = projects.find(
-                    (p) => p.id === payment.projectId
-                  );
+                    return (
+                      <div
+                        key={
+                          payment.id
+                        }
+                        className="px-4 py-3"
+                      >
 
-                  return (
-                    <div
-                      key={payment.id}
-                      className="px-4 py-3"
-                    >
+                        <div className="flex items-center justify-between mb-1">
 
-                      <div className="flex items-center justify-between mb-1">
+                          <div className="font-mono text-[12px] text-moss font-medium">
+                            {formatKsh(
+                              payment.amount
+                            )}
+                          </div>
 
-                        <div className="font-mono text-[12px] text-moss font-medium">
-                          {formatKsh(payment.amount)}
+                          <div className="font-mono text-[11px] text-muted">
+                            {payment.date}
+                          </div>
+
                         </div>
 
-                        <div className="font-mono text-[11px] text-muted">
-                          {payment.date}
+                        <div className="text-[11.5px] text-ink">
+                          {project?.name ||
+                            "Unknown project"}
+                        </div>
+
+                        <div className="text-[11px] text-muted mt-0.5">
+                          {payment.reference ||
+                            "No reference"}{" "}
+                          ·{" "}
+                          {payment.note ||
+                            "No note"}
                         </div>
 
                       </div>
-
-                      <div className="text-[11.5px] text-ink">
-                        {project?.name || "Unknown project"}
-                      </div>
-
-                      <div className="text-[11px] text-muted mt-0.5">
-                        {payment.reference || "No reference"} ·{" "}
-                        {payment.note || "No note"}
-                      </div>
-
-                    </div>
-                  );
-                })
-
+                    );
+                  }
+                )
               )}
 
             </div>
-
           </Card>
-
         </div>
 
         {/* ------------------------------------------------------------------ */}
@@ -518,27 +944,43 @@ if (!session || !isAdmin) {
 
         <Modal
           open={open}
-          onClose={() => setOpen(false)}
+          onClose={() =>
+            setOpen(false)
+          }
           title="Record payment"
           subtitle="This will update the project's paid balance"
         >
 
           <form
-            onSubmit={handleSubmit}
+            onSubmit={
+              handleSubmit
+            }
             className="flex flex-col gap-3.5"
           >
 
             {/* PROJECT */}
-            <Field label="Project" required>
+
+            <Field
+              label="Project"
+              required
+            >
 
               <Select
                 required
-                value={form.projectId}
+                value={
+                  form.projectId
+                }
                 onChange={(e) =>
-                  setForm((current) => ({
-                    ...current,
-                    projectId: e.target.value,
-                  }))
+                  setForm(
+                    (
+                      current
+                    ) => ({
+                      ...current,
+                      projectId:
+                        e.target
+                          .value,
+                    })
+                  )
                 }
               >
 
@@ -546,81 +988,147 @@ if (!session || !isAdmin) {
                   Select project
                 </option>
 
-                {projects.map((project) => {
+                {projects.map(
+                  (project) => {
+                    const outstanding =
+                      getOutstanding(
+                        project
+                      );
 
-                  const outstanding = Math.max(
-                    Number(project.budget || 0) -
-                      Number(project.paid || 0),
-                    0
-                  );
+                    const invoiced =
+                      getInvoiced(
+                        project
+                      );
 
-                  return (
-                    <option
-                      key={project.id}
-                      value={project.id}
-                    >
-                      {project.sheetNo} — {project.name}{" "}
-                      (Outstanding: {formatKsh(outstanding)})
-                    </option>
-                  );
-                })}
+                    const paid =
+                      getPaid(
+                        project
+                      );
+
+                    return (
+                      <option
+                        key={
+                          project.id
+                        }
+                        value={
+                          project.id
+                        }
+                        disabled={
+                          outstanding <=
+                          0
+                        }
+                      >
+                        {
+                          project.sheetNo
+                        }{" "}
+                        —{" "}
+                        {
+                          project.name
+                        }{" "}
+                        (Outstanding:{" "}
+                        {formatKsh(
+                          outstanding
+                        )}{" "}
+                        / Invoiced:{" "}
+                        {formatKsh(
+                          invoiced
+                        )}{" "}
+                        / Paid:{" "}
+                        {formatKsh(
+                          paid
+                        )}
+                        )
+                      </option>
+                    );
+                  }
+                )}
 
               </Select>
 
             </Field>
 
             {/* AMOUNT + DATE */}
+
             <FormRow>
 
               <Field
                 label="Amount (KSh)"
                 required
               >
+
                 <Input
                   type="number"
                   min="1"
                   step="0.01"
                   required
-                  value={form.amount}
+                  value={
+                    form.amount
+                  }
                   onChange={(e) =>
-                    setForm((current) => ({
-                      ...current,
-                      amount: e.target.value,
-                    }))
+                    setForm(
+                      (
+                        current
+                      ) => ({
+                        ...current,
+                        amount:
+                          e.target
+                            .value,
+                      })
+                    )
                   }
                   placeholder="e.g. 2500000"
                 />
+
               </Field>
 
               <Field
                 label="Payment date"
                 required
               >
+
                 <Input
                   type="date"
                   required
-                  value={form.date}
+                  value={
+                    form.date
+                  }
                   onChange={(e) =>
-                    setForm((current) => ({
-                      ...current,
-                      date: e.target.value,
-                    }))
+                    setForm(
+                      (
+                        current
+                      ) => ({
+                        ...current,
+                        date:
+                          e.target
+                            .value,
+                      })
+                    )
                   }
                 />
+
               </Field>
 
             </FormRow>
 
             {/* REFERENCE */}
+
             <Field label="Reference number">
 
               <Input
-                value={form.reference}
+                value={
+                  form.reference
+                }
                 onChange={(e) =>
-                  setForm((current) => ({
-                    ...current,
-                    reference: e.target.value,
-                  }))
+                  setForm(
+                    (
+                      current
+                    ) => ({
+                      ...current,
+                      reference:
+                        e.target
+                          .value,
+                    })
+                  )
                 }
                 placeholder="e.g. PAY-A101-003"
               />
@@ -628,28 +1136,173 @@ if (!session || !isAdmin) {
             </Field>
 
             {/* NOTE */}
+
             <Field label="Note">
 
               <Textarea
                 rows={2}
-                value={form.note}
+                value={
+                  form.note
+                }
                 onChange={(e) =>
-                  setForm((current) => ({
-                    ...current,
-                    note: e.target.value,
-                  }))
+                  setForm(
+                    (
+                      current
+                    ) => ({
+                      ...current,
+                      note: e.target
+                        .value,
+                    })
+                  )
                 }
                 placeholder="e.g. Second stage payment..."
               />
 
             </Field>
 
+            {/* PAYMENT SUMMARY */}
+
+            {form.projectId &&
+              (() => {
+                const project =
+                  projects.find(
+                    (p) =>
+                      p.id ===
+                      form.projectId
+                  );
+
+                if (!project) {
+                  return null;
+                }
+
+                const contract =
+                  getContractValue(
+                    project
+                  );
+
+                const invoiced =
+                  getInvoiced(
+                    project
+                  );
+
+                const paid =
+                  getPaid(
+                    project
+                  );
+
+                const outstanding =
+                  getOutstanding(
+                    project
+                  );
+
+                const amount =
+                  Number(
+                    form.amount ||
+                      0
+                  );
+
+                const remainingAfterPayment =
+                  Math.max(
+                    outstanding -
+                      amount,
+                    0
+                  );
+
+                return (
+                  <div className="rounded-md border border-line bg-vellum/50 p-3 text-[11px]">
+
+                    <div className="font-medium text-ink mb-2">
+                      Payment summary
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-y-1.5">
+
+                      <div className="text-muted">
+                        Contract value
+                      </div>
+
+                      <div className="text-right font-mono">
+                        {formatKsh(
+                          contract
+                        )}
+                      </div>
+
+                      <div className="text-muted">
+                        Total invoiced
+                      </div>
+
+                      <div className="text-right font-mono">
+                        {formatKsh(
+                          invoiced
+                        )}
+                      </div>
+
+                      <div className="text-muted">
+                        Already paid
+                      </div>
+
+                      <div className="text-right font-mono text-moss">
+                        {formatKsh(
+                          paid
+                        )}
+                      </div>
+
+                      <div className="text-muted">
+                        Current outstanding
+                      </div>
+
+                      <div className="text-right font-mono text-brick">
+                        {formatKsh(
+                          outstanding
+                        )}
+                      </div>
+
+                      {amount > 0 && (
+                        <>
+                          <div className="text-muted border-t border-line pt-1.5 mt-1.5">
+                            This payment
+                          </div>
+
+                          <div className="text-right font-mono text-moss border-t border-line pt-1.5 mt-1.5">
+                            {formatKsh(
+                              amount
+                            )}
+                          </div>
+
+                          <div className="text-muted">
+                            Balance after payment
+                          </div>
+
+                          <div className="text-right font-mono font-medium">
+                            {formatKsh(
+                              remainingAfterPayment
+                            )}
+                          </div>
+                        </>
+                      )}
+
+                    </div>
+
+                    {amount >
+                      outstanding && (
+                      <div className="mt-2 text-brick">
+                        Payment exceeds the outstanding invoiced balance.
+                      </div>
+                    )}
+
+                  </div>
+                );
+              })()}
+
             {/* ACTIONS */}
+
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
 
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() =>
+                  setOpen(false)
+                }
                 className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted hover:bg-vellum"
               >
                 Cancel
@@ -657,7 +1310,35 @@ if (!session || !isAdmin) {
 
               <button
                 type="submit"
-                className="px-4 py-2 rounded-md text-[12.5px] bg-moss text-white font-medium hover:opacity-90"
+                disabled={
+                  !form.projectId ||
+                  !form.amount ||
+                  Number(
+                    form.amount
+                  ) <= 0 ||
+                  (() => {
+                    const project =
+                      projects.find(
+                        (p) =>
+                          p.id ===
+                          form.projectId
+                      );
+
+                    if (!project) {
+                      return true;
+                    }
+
+                    return (
+                      Number(
+                        form.amount
+                      ) >
+                      getOutstanding(
+                        project
+                      )
+                    );
+                  })()
+                }
+                className="px-4 py-2 rounded-md text-[12.5px] bg-moss text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Record payment
               </button>
@@ -665,9 +1346,7 @@ if (!session || !isAdmin) {
             </div>
 
           </form>
-
         </Modal>
-
       </div>
     </AppShell>
   );

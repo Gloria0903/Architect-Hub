@@ -2,69 +2,273 @@ import type { Session } from "next-auth";
 import type { Prisma } from "@prisma/client";
 
 /**
- * Role-based access control helpers.
+ * --------------------------------------------------------------------------
+ * ROLE-BASED ACCESS CONTROL
+ * --------------------------------------------------------------------------
  *
- * Rules (two roles only):
- *  - ADMIN: full access to everything — user management, client management,
- *    firm settings, project creation/reassignment, payments, all reports.
- *  - ARCHITECT: scoped strictly to projects they are the architect OR
- *    supervisor on. Cannot manage staff, clients, payments, firm settings,
- *    or reassignment.
+ * Roles:
  *
- * These functions are the single source of truth for authorization checks.
- * Every API route must call the relevant helper server-side — never rely on
- * hiding a button in the UI as the actual security boundary.
+ * ADMIN
+ *   - Full access
+ *   - Staff management
+ *   - Client management
+ *   - Project creation
+ *   - Project reassignment
+ *   - Financial management
+ *   - Payment recording
+ *   - All financial reports
+ *
+ * ARCHITECT
+ *   - Can access projects where they are:
+ *       1. architect OR
+ *       2. supervisor
+ *
+ *   - Can view related project resources:
+ *       - projects
+ *       - daily logs
+ *       - comments
+ *       - documents
+ *       - payments belonging to assigned projects
+ *
+ *   - Cannot:
+ *       - manage staff
+ *       - manage clients
+ *       - create/reassign projects
+ *       - record payments
+ *       - perform administrative financial operations
+ *
+ * IMPORTANT:
+ *
+ * These functions are server-side authorization helpers.
+ * UI restrictions are NOT considered security boundaries.
  */
 
+/*
+|--------------------------------------------------------------------------
+| Role helpers
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * Returns true only for administrators.
+ */
 export function isAdmin(session: Session): boolean {
   return session.user.role === "ADMIN";
 }
 
-export function canManageStaff(session: Session): boolean {
-  return session.user.role === "ADMIN";
+/**
+ * Returns true when the session belongs to an architect.
+ */
+export function isArchitect(session: Session): boolean {
+  return session.user.role === "ARCHITECT";
 }
 
-export function canManageClients(session: Session): boolean {
-  return session.user.role === "ADMIN";
-}
+/*
+|--------------------------------------------------------------------------
+| Staff management
+|--------------------------------------------------------------------------
+*/
 
-export function canManageFirmSettings(session: Session): boolean {
+export function canManageStaff(
+  session: Session
+): boolean {
   return isAdmin(session);
 }
 
-export function canCreateProjects(session: Session): boolean {
-  return session.user.role === "ADMIN";
+/*
+|--------------------------------------------------------------------------
+| Client management
+|--------------------------------------------------------------------------
+*/
+
+export function canManageClients(
+  session: Session
+): boolean {
+  return isAdmin(session);
 }
 
-export function canReassignProjects(session: Session): boolean {
-  return session.user.role === "ADMIN";
+/*
+|--------------------------------------------------------------------------
+| Firm settings
+|--------------------------------------------------------------------------
+*/
+
+export function canManageFirmSettings(
+  session: Session
+): boolean {
+  return isAdmin(session);
 }
 
-export function canRecordPayments(session: Session): boolean {
-  return session.user.role === "ADMIN";
+/*
+|--------------------------------------------------------------------------
+| Project management
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * Only administrators can create projects.
+ */
+export function canCreateProjects(
+  session: Session
+): boolean {
+  return isAdmin(session);
 }
 
-/** Prisma `where` clause fragment that scopes projects to what this user may see. */
-export function projectAccessWhere(session: Session): Prisma.ProjectWhereInput {
-  if (isAdmin(session)) return {};
+/**
+ * Only administrators can reassign projects.
+ */
+export function canReassignProjects(
+  session: Session
+): boolean {
+  return isAdmin(session);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Financial permissions
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * Only administrators can RECORD payments.
+ *
+ * IMPORTANT:
+ *
+ * This does NOT mean architects cannot READ payments.
+ *
+ * GET /api/payments uses project-scoped read access.
+ *
+ * POST /api/payments uses this function.
+ */
+export function canRecordPayments(
+  session: Session
+): boolean {
+  return isAdmin(session);
+}
+
+/**
+ * Whether the user can view financial/payment information.
+ *
+ * Both ADMIN and ARCHITECT can read financial data, but architects
+ * are restricted to their assigned projects.
+ */
+export function canViewPayments(
+  session: Session
+): boolean {
+  return (
+    isAdmin(session) ||
+    isArchitect(session)
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Project access
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * Prisma WHERE clause limiting projects to what the current user
+ * is allowed to see.
+ *
+ * ADMIN:
+ *   No restriction.
+ *
+ * ARCHITECT:
+ *   Only projects where they are architect OR supervisor.
+ */
+export function projectAccessWhere(
+  session: Session
+): Prisma.ProjectWhereInput {
+  if (isAdmin(session)) {
+    return {};
+  }
+
   return {
-    OR: [{ architectId: session.user.id }, { supervisorId: session.user.id }],
+    OR: [
+      {
+        architectId: session.user.id,
+      },
+      {
+        supervisorId: session.user.id,
+      },
+    ],
   };
 }
 
-/** Whether the given project's architect/supervisor ids mean this user can access it. */
+/**
+ * Checks whether the current user can access a specific project.
+ *
+ * ADMIN:
+ *   Always true.
+ *
+ * ARCHITECT:
+ *   Must be architect or supervisor.
+ */
 export function canAccessProject(
   session: Session,
-  project: { architectId?: string | null; supervisorId?: string | null }
+  project: {
+    architectId?: string | null;
+    supervisorId?: string | null;
+  }
 ): boolean {
-  if (isAdmin(session)) return true;
-  return project.architectId === session.user.id || project.supervisorId === session.user.id;
+  if (isAdmin(session)) {
+    return true;
+  }
+
+  return (
+    project.architectId === session.user.id ||
+    project.supervisorId === session.user.id
+  );
 }
 
-/** Prisma `where` clause fragment scoping a project-linked resource (logs, documents, comments, payments) by role. */
-export function relatedProjectAccessWhere(session: Session): Prisma.ProjectWhereInput | undefined {
-  if (isAdmin(session)) return undefined;
+/*
+|--------------------------------------------------------------------------
+| Related project resources
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * Project WHERE clause used when querying resources that belong to a
+ * project.
+ *
+ * Examples:
+ *
+ *   Payment
+ *   Document
+ *   DailyLog
+ *   ClientComment
+ *
+ * ADMIN:
+ *   undefined → unrestricted.
+ *
+ * ARCHITECT:
+ *   only resources whose project is assigned to them.
+ *
+ * IMPORTANT:
+ *
+ * This object is intended to be nested under the resource's `project`
+ * relation:
+ *
+ * where: {
+ *   project: relatedProjectAccessWhere(session)
+ * }
+ */
+export function relatedProjectAccessWhere(
+  session: Session
+): Prisma.ProjectWhereInput | undefined {
+  if (isAdmin(session)) {
+    return undefined;
+  }
+
   return {
-    OR: [{ architectId: session.user.id }, { supervisorId: session.user.id }],
+    OR: [
+      {
+        architectId: session.user.id,
+      },
+      {
+        supervisorId: session.user.id,
+      },
+    ],
   };
 }
