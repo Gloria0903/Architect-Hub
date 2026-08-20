@@ -1,34 +1,22 @@
 "use client";
 
-import {
-  useRef,
-  useState,
-} from "react";
-
+import { useRef, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
-
+import { useStore, formatFileSize } from "@/store/app-store";
 import {
-  formatFileSize,
-  useStore,
-} from "@/store/app-store";
-
-import {
-  Archive,
-  Download,
-  File,
   FileText,
-  Film,
+  File,
   ImageIcon,
-  Loader2,
-  Trash2,
   Upload,
+  Download,
+  Trash2,
+  Loader2,
+  Archive,
+  Film,
 } from "lucide-react";
 
-const typeIcon: Record<
-  string,
-  React.ReactNode
-> = {
+const typeIcon: Record<string, React.ReactNode> = {
   pdf: (
     <FileText
       size={16}
@@ -83,8 +71,7 @@ function iconFor(
   mimeType: string,
   name: string
 ) {
-  const lowerName =
-    name.toLowerCase();
+  const lowerName = name.toLowerCase();
 
   if (
     mimeType.startsWith("image/") ||
@@ -112,26 +99,20 @@ function iconFor(
 
   if (
     mimeType.includes("sheet") ||
-    /\.(xlsx|xls|csv)$/i.test(
-      lowerName
-    )
+    /\.(xlsx|xls|csv)$/i.test(lowerName)
   ) {
     return typeIcon.xlsx;
   }
 
   if (
-    /\.(zip|rar|7z)$/i.test(
-      lowerName
-    )
+    /\.(zip|rar|7z)$/i.test(lowerName)
   ) {
     return typeIcon.archive;
   }
 
   if (
     mimeType.startsWith("video/") ||
-    /\.(mp4|mov|webm)$/i.test(
-      lowerName
-    )
+    /\.(mp4|mov|webm)$/i.test(lowerName)
   ) {
     return typeIcon.video;
   }
@@ -139,13 +120,6 @@ function iconFor(
   return typeIcon.default;
 }
 
-/**
- * Client-side file filter.
- *
- * IMPORTANT:
- * This is only a UI-level filter.
- * The API must still perform the real validation/security checks.
- */
 const ACCEPTED_FILE_TYPES = [
   ".pdf",
 
@@ -215,22 +189,11 @@ export default function DocumentsPage() {
     removeDocument,
   } = useStore();
 
-  /**
-   * Current document list filter.
-   *
-   * "all" means show documents from all projects.
-   */
   const [
     filterProject,
     setFilterProject,
   ] = useState("all");
 
-  /**
-   * Project that new uploads should belong to.
-   *
-   * Kept separate from filterProject so selecting an upload
-   * destination doesn't unexpectedly change the document list.
-   */
   const [
     uploadProject,
     setUploadProject,
@@ -251,17 +214,9 @@ export default function DocumentsPage() {
     setError,
   ] = useState("");
 
-  const [
-    success,
-    setSuccess,
-  ] = useState("");
-
   const fileInputRef =
     useRef<HTMLInputElement>(null);
 
-  /**
-   * Documents currently visible in the table.
-   */
   const visible =
     filterProject === "all"
       ? documents
@@ -272,23 +227,26 @@ export default function DocumentsPage() {
         );
 
   /**
-   * Open the browser's file picker.
+   * Open the native file picker.
    */
   function openFilePicker() {
     if (uploading) {
       return;
     }
 
+    if (!uploadProject && filterProject === "all") {
+      setError(
+        "Please choose a project before uploading a file."
+      );
+      return;
+    }
+
     setError("");
-    setSuccess("");
 
     if (fileInputRef.current) {
-      /**
-       * Reset the input so selecting the same file again
-       * still triggers onChange.
-       */
-      fileInputRef.current.value =
-        "";
+      // Reset the input first so selecting the same file again
+      // will still trigger onChange.
+      fileInputRef.current.value = "";
 
       fileInputRef.current.click();
     }
@@ -305,10 +263,10 @@ export default function DocumentsPage() {
     }
 
     /**
-     * If the current document filter is a specific project,
+     * If a project is currently being filtered,
      * use that project automatically.
      *
-     * Otherwise use the project selected in "Upload to project".
+     * Otherwise use the explicitly selected upload project.
      */
     const targetProject =
       filterProject !== "all"
@@ -322,20 +280,17 @@ export default function DocumentsPage() {
       return;
     }
 
-    const files =
-      Array.from(list);
+    const files = Array.from(list);
 
     if (files.length === 0) {
       return;
     }
 
     setError("");
-    setSuccess("");
     setUploading(true);
 
     const failedFiles: string[] = [];
-    const successfulFiles: string[] =
-      [];
+    const successfulFiles: string[] = [];
 
     try {
       for (const file of files) {
@@ -351,34 +306,13 @@ export default function DocumentsPage() {
             }
           );
 
-          /**
-           * IMPORTANT:
-           *
-           * Do not upload directly to S3 from this component.
-           *
-           * uploadDocument() handles:
-           *
-           * Documents page
-           *      ↓
-           * app-store
-           *      ↓
-           * /api/documents
-           *      ↓
-           * validation/security
-           *      ↓
-           * storage.ts
-           *      ↓
-           * S3 or local storage
-           */
           await uploadDocument(
             targetProject,
             file,
             "OTHER"
           );
 
-          successfulFiles.push(
-            file.name
-          );
+          successfulFiles.push(file.name);
 
           console.log(
             "[Documents] Upload successful:",
@@ -390,31 +324,18 @@ export default function DocumentsPage() {
             fileError
           );
 
-          failedFiles.push(
-            file.name
-          );
+          failedFiles.push(file.name);
         }
       }
 
       /**
-       * Show a useful result after all files have been attempted.
+       * Show a useful error if one or more files failed.
+       *
+       * Successful files are still kept because uploadDocument()
+       * handles each upload independently.
        */
       if (failedFiles.length > 0) {
-        if (
-          successfulFiles.length > 0
-        ) {
-          setError(
-            `Uploaded ${successfulFiles.length} ${
-              successfulFiles.length === 1
-                ? "file"
-                : "files"
-            }, but failed to upload: ${failedFiles.join(
-              ", "
-            )}`
-          );
-        } else if (
-          failedFiles.length === 1
-        ) {
+        if (failedFiles.length === 1) {
           setError(
             `Failed to upload "${failedFiles[0]}".`
           );
@@ -425,53 +346,38 @@ export default function DocumentsPage() {
             )}`
           );
         }
-
-        return;
       }
-
-      if (
-        successfulFiles.length > 0
-      ) {
-        setSuccess(
-          successfulFiles.length === 1
-            ? `"${successfulFiles[0]}" uploaded successfully.`
-            : `${successfulFiles.length} files uploaded successfully.`
-        );
-      }
-    } catch (e) {
-      /**
-       * This is a final safety net.
-       * Individual file failures are already handled above.
-       */
+    } catch (uploadError) {
       console.error(
         "[Documents] Upload process failed:",
-        e
+        uploadError
       );
 
       setError(
-        e instanceof Error
-          ? e.message
+        uploadError instanceof Error
+          ? uploadError.message
           : "Upload failed. Please try again."
       );
     } finally {
       setUploading(false);
 
       /**
-       * Clear the input after processing.
-       * This allows the same file to be selected again.
+       * Reset the input after processing.
+       * This also allows the same file to be selected again.
        */
       if (fileInputRef.current) {
-        fileInputRef.current.value =
-          "";
+        fileInputRef.current.value = "";
       }
     }
   }
 
+  /**
+   * Native file picker change handler.
+   */
   function handleFileInputChange(
     e: React.ChangeEvent<HTMLInputElement>
   ) {
-    const files =
-      e.target.files;
+    const files = e.target.files;
 
     if (!files || files.length === 0) {
       return;
@@ -480,19 +386,23 @@ export default function DocumentsPage() {
     void handleFiles(files);
   }
 
+  /**
+   * Drag-over handler.
+   */
   function handleDragOver(
     e: React.DragEvent<HTMLDivElement>
   ) {
     e.preventDefault();
     e.stopPropagation();
 
-    if (uploading) {
-      return;
+    if (!uploading) {
+      setDragging(true);
     }
-
-    setDragging(true);
   }
 
+  /**
+   * Drag-leave handler.
+   */
   function handleDragLeave(
     e: React.DragEvent<HTMLDivElement>
   ) {
@@ -502,6 +412,9 @@ export default function DocumentsPage() {
     setDragging(false);
   }
 
+  /**
+   * Drop handler.
+   */
   function handleDrop(
     e: React.DragEvent<HTMLDivElement>
   ) {
@@ -519,30 +432,13 @@ export default function DocumentsPage() {
     );
   }
 
-  function handleDropZoneKeyDown(
-    e: React.KeyboardEvent<HTMLDivElement>
-  ) {
-    if (uploading) {
-      return;
-    }
-
-    if (
-      e.key === "Enter" ||
-      e.key === " "
-    ) {
-      e.preventDefault();
-      openFilePicker();
-    }
-  }
-
+  /**
+   * Delete a document.
+   */
   async function handleDelete(
     id: string,
     name: string
   ) {
-    if (uploading) {
-      return;
-    }
-
     const confirmed = window.confirm(
       `Delete "${name}"?\n\nThis cannot be undone.`
     );
@@ -553,22 +449,17 @@ export default function DocumentsPage() {
 
     try {
       setError("");
-      setSuccess("");
 
       await removeDocument(id);
-
-      setSuccess(
-        `"${name}" deleted successfully.`
-      );
-    } catch (e) {
+    } catch (deleteError) {
       console.error(
         "[Documents] Document deletion failed:",
-        e
+        deleteError
       );
 
       setError(
-        e instanceof Error
-          ? e.message
+        deleteError instanceof Error
+          ? deleteError.message
           : "Failed to delete document."
       );
     }
@@ -577,10 +468,7 @@ export default function DocumentsPage() {
   return (
     <AppShell>
       <div>
-        {/* ─────────────────────────────────────────────
-            HEADER
-        ───────────────────────────────────────────── */}
-
+        {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div>
             <h1 className="font-display font-bold text-[20px] text-ink">
@@ -606,13 +494,11 @@ export default function DocumentsPage() {
                   size={15}
                   className="animate-spin"
                 />
-
                 Uploading...
               </>
             ) : (
               <>
                 <Upload size={15} />
-
                 Upload files
               </>
             )}
@@ -622,38 +508,40 @@ export default function DocumentsPage() {
             ref={fileInputRef}
             type="file"
             multiple
-            hidden
-            accept={
-              ACCEPTED_FILE_TYPES
-            }
+            className="hidden"
+            accept={ACCEPTED_FILE_TYPES}
             onChange={
               handleFileInputChange
             }
+            disabled={uploading}
           />
         </div>
 
-        {/* ─────────────────────────────────────────────
-            UPLOAD PROJECT
-        ───────────────────────────────────────────── */}
-
+        {/* Upload project selector */}
         <div className="mb-3">
-          <label
-            htmlFor="upload-project"
-            className="text-[11px] text-muted mr-2"
-          >
+          <label className="text-[11px] text-muted mr-2">
             Upload to project:
           </label>
 
           <select
-            id="upload-project"
-            value={uploadProject}
+            value={
+              filterProject !== "all"
+                ? filterProject
+                : uploadProject
+            }
             onChange={(e) => {
-              setUploadProject(
-                e.target.value
-              );
+              const value =
+                e.target.value;
+
+              setUploadProject(value);
+
+              /**
+               * Selecting a project here also filters the
+               * document list to that project.
+               */
+              setFilterProject(value);
 
               setError("");
-              setSuccess("");
             }}
             disabled={uploading}
             className="border border-line rounded-md px-2.5 py-1.5 text-[12px] bg-surface outline-none disabled:opacity-60"
@@ -676,10 +564,7 @@ export default function DocumentsPage() {
           </select>
         </div>
 
-        {/* ─────────────────────────────────────────────
-            DRAG & DROP
-        ───────────────────────────────────────────── */}
-
+        {/* Upload dropzone */}
         <div
           onClick={() => {
             if (!uploading) {
@@ -689,12 +574,24 @@ export default function DocumentsPage() {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onKeyDown={
-            handleDropZoneKeyDown
-          }
           role="button"
           tabIndex={uploading ? -1 : 0}
           aria-disabled={uploading}
+          onKeyDown={(e) => {
+            if (
+              uploading
+            ) {
+              return;
+            }
+
+            if (
+              e.key === "Enter" ||
+              e.key === " "
+            ) {
+              e.preventDefault();
+              openFilePicker();
+            }
+          }}
           className={`
             border-2
             border-dashed
@@ -769,50 +666,33 @@ export default function DocumentsPage() {
           )}
         </div>
 
-        {/* ─────────────────────────────────────────────
-            ERROR
-        ───────────────────────────────────────────── */}
-
+        {/* Error message */}
         {error && (
-          <div
-            role="alert"
-            className="border border-brick/30 bg-brick/5 rounded-md p-3 mb-4"
-          >
-            <p className="text-brick text-[12px]">
-              {error}
-            </p>
+          <div className="border border-brick/30 bg-brick/5 rounded-md p-3 mb-4">
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5 shrink-0">
+                <FileText
+                  size={15}
+                  className="text-brick"
+                />
+              </div>
+
+              <div>
+                <p className="text-brick text-[12px] font-medium">
+                  Upload error
+                </p>
+
+                <p className="text-brick/80 text-[12px] mt-0.5">
+                  {error}
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* ─────────────────────────────────────────────
-            SUCCESS
-        ───────────────────────────────────────────── */}
-
-        {success && (
-          <div
-            role="status"
-            className="border border-moss/30 bg-moss/5 rounded-md p-3 mb-4"
-          >
-            <p className="text-moss text-[12px]">
-              {success}
-            </p>
-          </div>
-        )}
-
-        {/* ─────────────────────────────────────────────
-            FILTER
-        ───────────────────────────────────────────── */}
-
+        {/* Filter */}
         <div className="flex items-center gap-2 mb-4">
-          <label
-            htmlFor="filter-project"
-            className="sr-only"
-          >
-            Filter documents by project
-          </label>
-
           <select
-            id="filter-project"
             value={filterProject}
             onChange={(e) => {
               const value =
@@ -820,23 +700,14 @@ export default function DocumentsPage() {
 
               setFilterProject(value);
 
-              /**
-               * When filtering to a specific project,
-               * automatically make it the upload destination too.
-               *
-               * Returning to "All projects" does not erase the
-               * previously selected upload project.
-               */
               if (value !== "all") {
-                setUploadProject(
-                  value
-                );
+                setUploadProject(value);
               }
 
               setError("");
-              setSuccess("");
             }}
-            className="border border-line rounded-md px-2.5 py-1.5 text-[12px] bg-surface outline-none"
+            disabled={uploading}
+            className="border border-line rounded-md px-2.5 py-1.5 text-[12px] bg-surface outline-none disabled:opacity-60"
           >
             <option value="all">
               All projects
@@ -863,10 +734,7 @@ export default function DocumentsPage() {
           </span>
         </div>
 
-        {/* ─────────────────────────────────────────────
-            DOCUMENT TABLE
-        ───────────────────────────────────────────── */}
-
+        {/* Documents table */}
         <Card className="overflow-hidden">
           {visible.length === 0 ? (
             <div className="p-8 text-center text-muted text-[12.5px]">
@@ -907,8 +775,7 @@ export default function DocumentsPage() {
                         key={file.id}
                         className="border-t border-line hover:bg-vellum/40 transition-colors"
                       >
-                        {/* FILE */}
-
+                        {/* File */}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2.5 min-w-0">
                             {iconFor(
@@ -922,8 +789,7 @@ export default function DocumentsPage() {
                           </div>
                         </td>
 
-                        {/* PROJECT */}
-
+                        {/* Project */}
                         <td className="px-4 py-3 font-mono text-[11px] text-muted">
                           {file.project
                             ?.sheetNo ||
@@ -934,24 +800,21 @@ export default function DocumentsPage() {
                             "Unknown project"}
                         </td>
 
-                        {/* SIZE */}
-
+                        {/* Size */}
                         <td className="px-4 py-3 font-mono text-[11px] text-muted">
                           {formatFileSize(
                             file.fileSize
                           )}
                         </td>
 
-                        {/* DATE */}
-
+                        {/* Uploaded */}
                         <td className="px-4 py-3 font-mono text-[11px] text-muted">
                           {new Date(
                             file.uploadedAt
                           ).toLocaleDateString()}
                         </td>
 
-                        {/* ACTIONS */}
-
+                        {/* Actions */}
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-3">
                             <a
@@ -979,10 +842,7 @@ export default function DocumentsPage() {
                                   file.name
                                 )
                               }
-                              disabled={
-                                uploading
-                              }
-                              className="text-muted hover:text-brick disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="text-muted hover:text-brick"
                               title="Delete"
                               aria-label={`Delete ${file.name}`}
                             >
