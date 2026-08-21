@@ -4,6 +4,9 @@ import { auth } from "@/lib/auth";
 import { canAccessProject } from "@/lib/rbac";
 import { readStoredFile } from "@/lib/storage";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

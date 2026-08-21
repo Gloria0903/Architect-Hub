@@ -1,9 +1,16 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { UploadCloud, Loader2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  Upload,
+  X,
+} from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+
 import {
   ALLOWED_DOCUMENT_TYPES,
   validateDocumentUpload,
@@ -15,14 +22,19 @@ type UploadTarget =
 
 interface DocumentUploaderProps {
   target: UploadTarget;
-  onComplete: () => void;
+  onComplete: () => void | Promise<void>;
   onError?: (message: string) => void;
+  buttonLabel?: string;
+  multiple?: boolean;
+  /** Show a drop zone around the button. Defaults to false so existing
+   * inline usages (next to a select, etc.) don't suddenly grow a big box. */
+  dropzone?: boolean;
 }
 
-interface QueuedFile {
-  file: File;
-  progress: number; // 0-100
-  status: "pending" | "uploading" | "done" | "error";
+interface UploadItem {
+  id: string;
+  name: string;
+  status: "uploading" | "success" | "error";
   error?: string;
 }
 
@@ -30,248 +42,362 @@ const ACCEPT_ATTR = [
   ...Object.keys(ALLOWED_DOCUMENT_TYPES),
   ".rvt",
   ".rfa",
+  ".rte",
   ".dwg",
   ".dxf",
   ".skp",
   ".ifc",
+  ".ifczip",
+  ".dgn",
+  ".3dm",
 ].join(",");
 
-/**
- * Uploads via a single multipart POST straight to /api/documents (new) or
- * /api/documents/:id/versions (new version) — one request, not a
- * presign-then-confirm dance. This is deliberate: those routes do
- * server-side magic-byte sniffing on the real file bytes
- * (sniffDangerousSignature in document-validation.ts), which only works
- * because the bytes pass through our server. A direct-to-storage
- * presigned upload would skip that check entirely.
- *
- * XHR (not fetch) is used only so we get upload progress events — fetch
- * still can't report upload progress for a request body.
- */
-export function DocumentUploader({ target, onComplete, onError }: DocumentUploaderProps) {
-  const [queue, setQueue] = useState<QueuedFile[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+// Uploads can legitimately take a while (large CAD/BIM files, slow
+// connections), but they must never hang forever and look like the button
+// silently did nothing. If S3/the network stalls, this turns that into a
+// visible error instead of an infinite spinner.
+const UPLOAD_TIMEOUT_MS = 120_000;
 
-  const uploadOne = useCallback(
-    async (file: File) => {
-
-      console.log("[DocumentUploader] uploadOne called:", {
-  name: file.name,
-  type: file.type,
-  size: file.size,
-});
-      // Fast client-side feedback only — the server repeats this check
-      // (and the magic-byte sniff) against the real bytes regardless.
-      const validation = validateDocumentUpload({
-        fileName: file.name,
-        mimeType: file.type,
-        sizeBytes: file.size,
-      });
-      if (!validation.ok) {
-  console.error("[DocumentUploader] Client validation failed:", {
-    file: file.name,
-    type: file.type,
-    size: file.size,
-    error: validation.error,
-  });
-
-  setQueue((q) =>
-    q.map((item) =>
-      item.file === file
-        ? {
-            ...item,
-            status: "error",
-            error: validation.error,
-          }
-        : item
-    )
-  );
-
-  onError?.(validation.error || "File validation failed.");
-
-  return;
+function uploadUrl(target: UploadTarget): string {
+  return target.mode === "new"
+    ? "/api/documents"
+    : `/api/documents/${target.documentId}/versions`;
 }
 
-console.log("[DocumentUploader] Client validation passed:", file.name);
+function buildFormData(target: UploadTarget, file: File): FormData {
+  const formData = new FormData();
+  formData.append("file", file, file.name);
+
+  if (target.mode === "new") {
+    formData.append("projectId", target.projectId);
+    formData.append("category", target.category);
+  }
+
+  return formData;
+}
+
+async function parseResponseBody(response: Response): Promise<unknown> {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return response.json().catch(() => null);
+  }
+
+  const text = await response.text().catch(() => "");
+  return { error: text || `Request failed with HTTP ${response.status}` };
+}
+
+function extractErrorMessage(status: number, body: unknown): string {
+  if (typeof body === "object" && body !== null) {
+    const record = body as Record<string, unknown>;
+    if (typeof record.error === "string" && record.error) return record.error;
+    if (typeof record.message === "string" && record.message)
+      return record.message;
+  }
+
+  if (status === 401) return "Your session has expired. Please log in again.";
+  if (status === 403)
+    return "You do not have permission to upload documents to this project.";
+  if (status === 413) return "That file is too large to upload.";
+  if (status === 429) return "Too many uploads at once. Please wait a moment and try again.";
+
+  return `Upload failed (HTTP ${status}). Please try again.`;
+}
+
+export function DocumentUploader({
+  target,
+  onComplete,
+  onError,
+  buttonLabel = "Upload files",
+  multiple = true,
+  dropzone = false,
+}: DocumentUploaderProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [items, setItems] = useState<UploadItem[]>([]);
+
+  const updateItem = useCallback(
+    (id: string, update: Partial<UploadItem>) => {
+      setItems((current) =>
+        current.map((item) => (item.id === id ? { ...item, ...update } : item))
+      );
+    },
+    []
+  );
+
+  const removeItem = useCallback((id: string) => {
+    setItems((current) => current.filter((item) => item.id !== id));
+  }, []);
+
+  /**
+   * Upload a single file. Every branch either returns true/false or throws
+   * inside a try/catch that reports the error — there is no path where this
+   * can fail without the caller (and the user) finding out.
+   */
+  const uploadOne = useCallback(
+    async (file: File, itemId: string): Promise<boolean> => {
+      const validation = validateDocumentUpload({
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+      });
+
+      if (!validation.ok) {
+        const message = validation.error || "This file cannot be uploaded.";
+        updateItem(itemId, { status: "error", error: message });
+        onError?.(message);
+        return false;
+      }
+
+      if (file.size <= 0) {
+        const message = `"${file.name}" is empty.`;
+        updateItem(itemId, { status: "error", error: message });
+        onError?.(message);
+        return false;
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
 
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-        if (target.mode === "new") {
-          formData.append("projectId", target.projectId);
-          formData.append("category", target.category);
-        }
-
-        const url =
-          target.mode === "new"
-            ? "/api/documents"
-            : `/api/documents/${target.documentId}/versions`;
-
-        setQueue((q) =>
-          q.map((item) => (item.file === file ? { ...item, status: "uploading" } : item))
-        );
-
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          console.log("[DocumentUploader] Sending upload request:", {
-  url,
-  file: file.name,
-  type: file.type,
-  size: file.size,
-});
-
-xhr.open("POST", url);
-          xhr.upload.onprogress = (e) => {
-            if (!e.lengthComputable) return;
-            const progress = Math.round((e.loaded / e.total) * 100);
-            setQueue((q) => q.map((item) => (item.file === file ? { ...item, progress } : item)));
-          };
-          xhr.onload = () => {
-  console.log("[DocumentUploader] Upload response:", {
-    status: xhr.status,
-    response: xhr.responseText,
-  });
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve();
-              return;
-            }
-            let message = "Upload failed";
-            try {
-              const body = JSON.parse(xhr.responseText);
-              if (body?.error) message = body.error;
-            } catch {
-              // response wasn't JSON — fall back to the generic message
-            }
-            reject(new Error(message));
-          };
-          xhr.onerror = () => {
-  console.error("[DocumentUploader] XHR network error");
-  reject(new Error("Network error during upload"));
-};
-          console.log("[DocumentUploader] xhr.send()");
-
-xhr.send(formData);
+        const response = await fetch(uploadUrl(target), {
+          method: "POST",
+          body: buildFormData(target, file),
+          credentials: "same-origin",
+          cache: "no-store",
+          signal: controller.signal,
         });
 
-        setQueue((q) =>
-          q.map((item) => (item.file === file ? { ...item, status: "done", progress: 100 } : item))
-        );
-        onComplete();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Upload failed";
-        setQueue((q) =>
-          q.map((item) => (item.file === file ? { ...item, status: "error", error: message } : item))
-        );
+        const body = await parseResponseBody(response);
+
+        if (!response.ok) {
+          throw new Error(extractErrorMessage(response.status, body));
+        }
+
+        if (typeof body !== "object" || body === null || !("id" in body)) {
+          throw new Error(
+            "The server accepted the upload but did not return a document record."
+          );
+        }
+
+        updateItem(itemId, { status: "success", error: undefined });
+        return true;
+      } catch (error) {
+        const message =
+          error instanceof Error && error.name === "AbortError"
+            ? "Upload timed out. Check your connection and try again."
+            : error instanceof Error
+              ? error.message
+              : "Upload failed. Please try again.";
+
+        console.error("[DocumentUploader] Upload failed:", {
+          file: file.name,
+          error,
+        });
+
+        updateItem(itemId, { status: "error", error: message });
         onError?.(message);
+        return false;
+      } finally {
+        clearTimeout(timeout);
       }
     },
-    [target, onComplete, onError]
+    [onError, target, updateItem]
   );
 
   const handleFiles = useCallback(
-  (files: FileList | null) => {
-    console.log("[DocumentUploader] handleFiles fired");
+    async (fileList: FileList | File[] | null) => {
+      try {
+        onError?.("");
 
-    if (!files || files.length === 0) {
-      console.warn("[DocumentUploader] No files selected");
+        if (!fileList) return;
+
+        const files = Array.from(fileList);
+        if (files.length === 0) return;
+
+        // Visible feedback the instant files are chosen — before any
+        // validation or network call — so a picked file is never silently
+        // dropped.
+        const newItems: UploadItem[] = files.map((file, index) => ({
+          id: `${Date.now()}-${index}-${file.name}`,
+          name: file.name,
+          status: "uploading",
+        }));
+
+        setItems((current) => [...current, ...newItems]);
+        setUploading(true);
+
+        let successful = 0;
+
+        for (let i = 0; i < files.length; i++) {
+          const ok = await uploadOne(files[i], newItems[i].id);
+          if (ok) successful++;
+        }
+
+        if (successful > 0) {
+          try {
+            await onComplete();
+          } catch (refreshError) {
+            console.error(
+              "[DocumentUploader] Refresh after upload failed:",
+              refreshError
+            );
+          }
+        }
+      } catch (error) {
+        // Last-resort net: nothing above should throw past uploadOne's own
+        // try/catch, but if something unexpected does, surface it instead
+        // of letting it vanish as an unhandled rejection.
+        const message =
+          error instanceof Error ? error.message : "Something went wrong while uploading.";
+        console.error("[DocumentUploader] Unexpected failure:", error);
+        onError?.(message);
+      } finally {
+        setUploading(false);
+      }
+    },
+    [onComplete, onError, uploadOne]
+  );
+
+  const openPicker = useCallback(() => {
+    if (uploading) return;
+    const el = inputRef.current;
+    if (!el) {
+      console.error("[DocumentUploader] File input ref is not attached.");
+      onError?.("Could not open the file picker. Please reload the page and try again.");
       return;
     }
+    el.value = "";
+    el.click();
+  }, [uploading, onError]);
 
-    const selectedFiles = Array.from(files);
+  const handleInputChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = event.currentTarget.files;
+      void handleFiles(files);
+      event.currentTarget.value = "";
+    },
+    [handleFiles]
+  );
 
-    console.log(
-      "[DocumentUploader] Selected files:",
-      selectedFiles.map((file) => ({
-        name: file.name,
-        type: file.type,
-        size: file.size,
-      }))
-    );
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      setDragging(false);
+      if (uploading) return;
+      void handleFiles(event.dataTransfer.files);
+    },
+    [handleFiles, uploading]
+  );
 
-    const incoming: QueuedFile[] = selectedFiles.map((file) => ({
-      file,
-      progress: 0,
-      status: "pending",
-    }));
+  const pickerButton = (
+    <div className="flex items-center gap-2">
+      <Button type="button" onClick={openPicker} disabled={uploading} className="gap-2">
+        {uploading ? (
+          <Loader2 size={15} className="animate-spin" />
+        ) : (
+          <Upload size={15} />
+        )}
+        {uploading ? "Uploading..." : buttonLabel}
+      </Button>
 
-    setQueue((q) => [...q, ...incoming]);
-
-    incoming.forEach((item) => {
-      console.log("[DocumentUploader] Starting upload:", item.file.name);
-      void uploadOne(item.file);
-    });
-  },
-  [uploadOne]
-);
+      <input
+        ref={inputRef}
+        type="file"
+        multiple={target.mode === "new" ? multiple : false}
+        accept={ACCEPT_ATTR}
+        className="hidden"
+        onChange={handleInputChange}
+        disabled={uploading}
+      />
+    </div>
+  );
 
   return (
     <div className="space-y-3">
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragging(false);
-          handleFiles(e.dataTransfer.files);
-        }}
-        onClick={() => inputRef.current?.click()}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
-        }}
-        className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center transition-colors cursor-pointer
-          ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-muted-foreground/50"}`}
-      >
-        <UploadCloud className="h-8 w-8 text-muted-foreground" />
-        <p className="text-sm font-medium">Drag and drop files here, or click to browse</p>
-        <p className="text-xs text-muted-foreground">
-          PDF, DWG, DXF, Revit, images, BOQs, contracts, presentations
-        </p>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple={target.mode === "new"}
-          accept={ACCEPT_ATTR}
-          className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
-        />
-      </div>
+      {dropzone ? (
+        <div
+          onClick={openPicker}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!uploading) setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          className={`cursor-pointer rounded-md border border-dashed p-6 text-center transition-colors ${
+            dragging ? "border-blueprint bg-blueprint-bg" : "border-line"
+          } ${uploading ? "pointer-events-none opacity-70" : ""}`}
+        >
+          <Upload size={22} className="mx-auto mb-2 text-muted" />
+          <p className="text-[12.5px] font-medium text-ink">
+            {uploading ? "Uploading…" : dragging ? "Drop files here" : "Drag and drop files, or click to browse"}
+          </p>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple={target.mode === "new" ? multiple : false}
+            accept={ACCEPT_ATTR}
+            className="hidden"
+            onChange={handleInputChange}
+            disabled={uploading}
+          />
+        </div>
+      ) : (
+        pickerButton
+      )}
 
-      {queue.length > 0 && (
-        <ul className="space-y-2">
-          {queue.map((item, i) => (
-            <li key={i} className="flex items-center gap-3 rounded-md border p-2 text-sm">
+      {items.length > 0 && (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center gap-3 rounded-md border border-line bg-surface px-3 py-2"
+            >
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{item.file.name}</p>
-                {item.status === "error" ? (
-                  <p className="text-xs text-destructive">{item.error}</p>
-                ) : item.status === "done" ? (
-                  <p className="text-xs text-emerald-600">Uploaded</p>
-                ) : (
-                  <Progress value={item.progress} className="h-1.5 mt-1" />
+                <p className="truncate text-[12px] font-medium text-ink">{item.name}</p>
+
+                {item.status === "uploading" && (
+                  <p className="mt-0.5 text-[11px] text-muted">Uploading...</p>
+                )}
+
+                {item.status === "success" && (
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-moss">
+                    <CheckCircle2 size={12} />
+                    Uploaded successfully
+                  </p>
+                )}
+
+                {item.status === "error" && (
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-brick">
+                    <AlertTriangle size={12} />
+                    {item.error || "Upload failed."}
+                  </p>
                 )}
               </div>
+
               {item.status === "uploading" && (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <Loader2 size={15} className="shrink-0 animate-spin text-blueprint" />
               )}
+
+              {item.status === "success" && (
+                <CheckCircle2 size={16} className="shrink-0 text-moss" />
+              )}
+
               {item.status === "error" && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={() => setQueue((q) => q.filter((_, idx) => idx !== i))}
+                <button
+                  type="button"
+                  onClick={() => removeItem(item.id)}
+                  className="shrink-0 text-muted hover:text-brick"
+                  aria-label={`Remove ${item.name}`}
                 >
-                  <X className="h-3 w-3" />
-                </Button>
+                  <X size={15} />
+                </button>
               )}
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

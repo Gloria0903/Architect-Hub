@@ -9,6 +9,14 @@ import {
 } from "@/lib/document-validation";
 import { notifyDocumentUploaded } from "@/lib/notifications";
 
+// File uploads need Node's Buffer/stream APIs (and the AWS SDK), which
+// aren't available on the Edge runtime. Pin this explicitly so a future
+// config change can't silently move it to Edge and break uploads.
+export const runtime = "nodejs";
+// Large CAD/BIM files can take a while to stream through the server on a
+// slow connection — give this route more headroom than the default.
+export const maxDuration = 60;
+
 export async function GET(req: NextRequest) {
   const session = await auth();
 
@@ -230,7 +238,8 @@ export async function POST(req: NextRequest) {
       fileSize,
     } = await saveUploadedFile(
       file,
-      buffer
+      buffer,
+      `projects/${projectId}/documents`
     );
 
     /*
@@ -333,7 +342,10 @@ export async function POST(req: NextRequest) {
         uid !== session.user.id
     );
 
-    await Promise.all(
+    // Notifications are secondary to the upload. A transient database or
+    // queue failure must never turn an already-stored document into a 500
+    // response, which makes the UI report a failed upload and hide the file.
+    await Promise.allSettled(
       [...new Set(notifyRecipients)].map(
         (userId) =>
           notifyDocumentUploaded({

@@ -216,8 +216,18 @@ const ALLOWED_EXTENSIONS: Record<string, DocumentTypeRule> = {
     maxSizeMb: 250,
   },
 
+  ".rte": {
+    label: "Revit template",
+    maxSizeMb: 500,
+  },
+
   ".ifc": {
     label: "IFC model",
+    maxSizeMb: 500,
+  },
+
+  ".ifczip": {
+    label: "Compressed IFC model",
     maxSizeMb: 500,
   },
 
@@ -335,6 +345,22 @@ const ALLOWED_EXTENSIONS: Record<string, DocumentTypeRule> = {
     maxSizeMb: 25,
   },
 
+  // Adobe / design source files
+  ".ai": {
+    label: "Adobe Illustrator file",
+    maxSizeMb: 100,
+  },
+
+  ".eps": {
+    label: "EPS artwork",
+    maxSizeMb: 100,
+  },
+
+  ".psd": {
+    label: "Photoshop file",
+    maxSizeMb: 500,
+  },
+
   // Archives
   ".zip": {
     label: "ZIP archive",
@@ -349,6 +375,22 @@ const ALLOWED_EXTENSIONS: Record<string, DocumentTypeRule> = {
   ".rar": {
     label: "RAR archive",
     maxSizeMb: 250,
+  },
+
+  // Project video / site walk-throughs
+  ".mp4": {
+    label: "MP4 video",
+    maxSizeMb: 500,
+  },
+
+  ".mov": {
+    label: "MOV video",
+    maxSizeMb: 500,
+  },
+
+  ".webm": {
+    label: "WebM video",
+    maxSizeMb: 500,
   },
 
   // Data / project exports
