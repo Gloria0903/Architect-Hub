@@ -2,24 +2,46 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
-import { Select, Textarea, Field } from "@/components/ui/form-field";
+import {
+  Select,
+  Textarea,
+  Field,
+} from "@/components/ui/form-field";
+
 import { useStore } from "@/store/app-store";
+
 import { CheckCircle } from "lucide-react";
+
 import { DocumentUploader } from "@/components/documents/document-uploader";
 
 const MIN_WORK_DESCRIPTION_LENGTH = 10;
 
 export default function NewDailyLogPage() {
   const router = useRouter();
-  const { projects, addLog, refresh } = useStore();
 
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [uploadError, setUploadError] = useState("");
-  const [progress, setProgress] = useState(50);
+  const {
+    projects,
+    addLog,
+    refresh,
+  } = useStore();
+
+  const [submitted, setSubmitted] =
+    useState(false);
+
+  const [submitting, setSubmitting] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [uploadError, setUploadError] =
+    useState("");
+
+  const [progress] =
+    useState(50);
 
   const [form, setForm] = useState({
     projectId: "",
@@ -29,24 +51,32 @@ export default function NewDailyLogPage() {
     nextActions: "",
   });
 
-  const workCompletedLength = form.workCompleted.trim().length;
+  const workCompletedLength =
+    form.workCompleted.trim().length;
+
   const workCompletedTooShort =
     workCompletedLength > 0 &&
-    workCompletedLength < MIN_WORK_DESCRIPTION_LENGTH;
+    workCompletedLength <
+      MIN_WORK_DESCRIPTION_LENGTH;
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(
+    e: React.FormEvent
+  ) {
     e.preventDefault();
 
     setError("");
 
-    // Validate project
     if (!form.projectId) {
-      setError("Please select a project.");
+      setError(
+        "Please select a project."
+      );
       return;
     }
 
-    // Validate work description
-    if (workCompletedLength < MIN_WORK_DESCRIPTION_LENGTH) {
+    if (
+      workCompletedLength <
+      MIN_WORK_DESCRIPTION_LENGTH
+    ) {
       setError(
         `Please describe the work completed in at least ${MIN_WORK_DESCRIPTION_LENGTH} characters.`
       );
@@ -58,17 +88,22 @@ export default function NewDailyLogPage() {
     try {
       await addLog({
         projectId: form.projectId,
-        workCompleted: form.workCompleted.trim(),
-        challenges: form.challenges.trim(),
-        pendingWork: form.pendingWork.trim(),
-        nextActions: form.nextActions.trim(),
+        workCompleted:
+          form.workCompleted.trim(),
+        challenges:
+          form.challenges.trim(),
+        pendingWork:
+          form.pendingWork.trim(),
+        nextActions:
+          form.nextActions.trim(),
         progress,
       });
 
       /*
-       * Attachments uploaded through DocumentUploader are already
-       * associated with the selected project. They do not need to be
-       * uploaded again when the daily log is submitted.
+       * Files uploaded through the
+       * DocumentUploader are already
+       * associated with the selected
+       * project.
        */
 
       setSubmitted(true);
@@ -78,7 +113,8 @@ export default function NewDailyLogPage() {
       }, 1800);
     } catch (err) {
       const message =
-        err instanceof Error && err.message
+        err instanceof Error &&
+        err.message
           ? err.message
           : "Failed to submit daily log. Please try again.";
 
@@ -91,21 +127,22 @@ export default function NewDailyLogPage() {
   if (submitted) {
     return (
       <AppShell>
-        <div className="max-w-lg mx-auto mt-20 text-center">
+        <div className="mx-auto mt-20 max-w-lg text-center">
           <CheckCircle
             size={48}
-            className="mx-auto text-moss mb-4"
+            className="mx-auto mb-4 text-moss"
           />
 
-          <h2 className="font-display font-bold text-[18px] text-ink">
+          <h2 className="font-display text-[18px] font-bold text-ink">
             Log submitted
           </h2>
 
-          <p className="text-muted text-[12.5px] mt-1">
-            Your daily log was submitted successfully.
+          <p className="mt-1 text-[12.5px] text-muted">
+            Your daily log was submitted
+            successfully.
           </p>
 
-          <p className="text-muted text-[12px] mt-1">
+          <p className="mt-1 text-[12px] text-muted">
             Redirecting to daily logs…
           </p>
         </div>
@@ -116,13 +153,14 @@ export default function NewDailyLogPage() {
   return (
     <AppShell>
       <div className="max-w-2xl">
-        <h1 className="font-display font-bold text-[20px] text-ink mb-0.5">
+        <h1 className="mb-0.5 font-display text-[20px] font-bold text-ink">
           Submit daily log
         </h1>
 
-        <p className="text-muted text-[12px] mb-5">
-          Required before close of business each day. All entries are
-          permanent and visible to supervisors.
+        <p className="mb-5 text-[12px] text-muted">
+          Required before close of business
+          each day. All entries are permanent
+          and visible to supervisors.
         </p>
 
         <Card className="p-5">
@@ -131,40 +169,59 @@ export default function NewDailyLogPage() {
             className="flex flex-col gap-4"
           >
             {/* PROJECT */}
-            <Field label="Project" required>
+            <Field
+              label="Project"
+              required
+            >
               <Select
                 required
                 value={form.projectId}
                 onChange={(e) => {
-                  setForm((f) => ({
-                    ...f,
-                    projectId: e.target.value,
+                  setForm((current) => ({
+                    ...current,
+                    projectId:
+                      e.target.value,
                   }));
 
                   setError("");
+                  setUploadError("");
                 }}
               >
-                <option value="">Select your project</option>
+                <option value="">
+                  Select your project
+                </option>
 
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.sheetNo} — {p.name}
+                {projects.map((project) => (
+                  <option
+                    key={project.id}
+                    value={project.id}
+                  >
+                    {project.sheetNo} —{" "}
+                    {project.name}
                   </option>
                 ))}
               </Select>
             </Field>
 
             {/* WORK COMPLETED */}
-            <Field label="Work completed today" required>
+            <Field
+              label="Work completed today"
+              required
+            >
               <Textarea
                 required
-                minLength={MIN_WORK_DESCRIPTION_LENGTH}
+                minLength={
+                  MIN_WORK_DESCRIPTION_LENGTH
+                }
                 rows={3}
-                value={form.workCompleted}
+                value={
+                  form.workCompleted
+                }
                 onChange={(e) => {
-                  setForm((f) => ({
-                    ...f,
-                    workCompleted: e.target.value,
+                  setForm((current) => ({
+                    ...current,
+                    workCompleted:
+                      e.target.value,
                   }));
 
                   setError("");
@@ -172,7 +229,7 @@ export default function NewDailyLogPage() {
                 placeholder="Describe what was completed today in detail…"
               />
 
-              <div className="flex justify-between items-center mt-1">
+              <div className="mt-1 flex items-center justify-between">
                 <p
                   className={`text-[11px] ${
                     workCompletedTooShort
@@ -201,11 +258,14 @@ export default function NewDailyLogPage() {
             <Field label="Challenges encountered">
               <Textarea
                 rows={2}
-                value={form.challenges}
+                value={
+                  form.challenges
+                }
                 onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    challenges: e.target.value,
+                  setForm((current) => ({
+                    ...current,
+                    challenges:
+                      e.target.value,
                   }))
                 }
                 placeholder="Any blockers, delays, or issues to flag…"
@@ -216,11 +276,14 @@ export default function NewDailyLogPage() {
             <Field label="Pending work">
               <Textarea
                 rows={2}
-                value={form.pendingWork}
+                value={
+                  form.pendingWork
+                }
                 onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    pendingWork: e.target.value,
+                  setForm((current) => ({
+                    ...current,
+                    pendingWork:
+                      e.target.value,
                   }))
                 }
                 placeholder="What remains outstanding…"
@@ -231,11 +294,14 @@ export default function NewDailyLogPage() {
             <Field label="Next actions">
               <Textarea
                 rows={2}
-                value={form.nextActions}
+                value={
+                  form.nextActions
+                }
                 onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    nextActions: e.target.value,
+                  setForm((current) => ({
+                    ...current,
+                    nextActions:
+                      e.target.value,
                   }))
                 }
                 placeholder="What happens next and by when…"
@@ -243,31 +309,36 @@ export default function NewDailyLogPage() {
             </Field>
 
             {/* PROJECT PROGRESS */}
-<div className="border border-line rounded-md p-4 bg-slate-50/50">
-  <div className="flex items-center justify-between mb-2">
-    <div>
-      <label className="text-[12px] text-muted block">
-        Project progress
-      </label>
-      <p className="text-[11px] text-muted mt-0.5">
-        Calculated automatically from project tasks and milestones.
-      </p>
-    </div>
+            <div className="rounded-md border border-line bg-slate-50/50 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <label className="block text-[12px] text-muted">
+                    Project progress
+                  </label>
 
-    <span className="font-mono text-[15px] text-blueprint font-semibold">
-      Calculated
-    </span>
-  </div>
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    Calculated automatically
+                    from project tasks and
+                    milestones.
+                  </p>
+                </div>
 
-  <p className="text-[11px] text-muted">
-    Daily logs record site activity. Project progress is determined from
-    the completion of project deliverables.
-  </p>
-</div>
+                <span className="font-mono text-[15px] font-semibold text-blueprint">
+                  Calculated
+                </span>
+              </div>
+
+              <p className="text-[11px] text-muted">
+                Daily logs record site activity.
+                Project progress is determined
+                from the completion of project
+                deliverables.
+              </p>
+            </div>
 
             {/* ATTACHMENTS */}
             <div>
-              <label className="text-[12px] text-muted block mb-1.5">
+              <label className="mb-1.5 block text-[12px] text-muted">
                 Attach files (optional)
               </label>
 
@@ -276,21 +347,31 @@ export default function NewDailyLogPage() {
                   key={form.projectId}
                   target={{
                     mode: "new",
-                    projectId: form.projectId,
-                    category: "SITE_REPORT",
+                    projectId:
+                      form.projectId,
+                    category:
+                      "SITE_REPORT",
                   }}
+                  multiple
                   onComplete={refresh}
                   onError={setUploadError}
                 />
               ) : (
-                <div className="border border-dashed rounded-md p-5 text-center text-[12px] border-line text-muted">
-                  Select a project above to attach drawings,
-                  photos, or documents.
+                <div className="rounded-lg border-2 border-dashed border-line bg-vellum/30 p-8 text-center">
+                  <p className="text-[13px] font-medium text-ink">
+                    Select a project first
+                  </p>
+
+                  <p className="mt-1 text-[11.5px] text-muted">
+                    After selecting a project,
+                    drag and drop your drawings,
+                    photos, or documents here.
+                  </p>
                 </div>
               )}
 
               {uploadError && (
-                <p className="text-brick text-[12px] mt-1.5">
+                <p className="mt-1.5 text-[12px] text-brick">
                   {uploadError}
                 </p>
               )}
@@ -298,20 +379,22 @@ export default function NewDailyLogPage() {
 
             {/* ERROR */}
             {error && (
-              <div className="border border-brick/30 bg-brick/5 rounded-md px-3 py-2">
-                <p className="text-brick text-[12px]">
+              <div className="rounded-md border border-brick/30 bg-brick/5 px-3 py-2">
+                <p className="text-[12px] text-brick">
                   {error}
                 </p>
               </div>
             )}
 
             {/* ACTIONS */}
-            <div className="flex justify-end gap-2 pt-1 border-t border-line">
+            <div className="flex justify-end gap-2 border-t border-line pt-1">
               <button
                 type="button"
-                onClick={() => router.back()}
+                onClick={() =>
+                  router.back()
+                }
                 disabled={submitting}
-                className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted disabled:opacity-60"
+                className="rounded-md border border-line px-4 py-2 text-[12.5px] text-muted disabled:opacity-60"
               >
                 Cancel
               </button>
@@ -324,9 +407,11 @@ export default function NewDailyLogPage() {
                   workCompletedLength <
                     MIN_WORK_DESCRIPTION_LENGTH
                 }
-                className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium hover:bg-ink/90 disabled:opacity-60"
+                className="rounded-md bg-ink px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink/90 disabled:opacity-60"
               >
-                {submitting ? "Submitting…" : "Submit log"}
+                {submitting
+                  ? "Submitting…"
+                  : "Submit log"}
               </button>
             </div>
           </form>

@@ -22,10 +22,7 @@ import {
 
 import { DocumentUploader } from "@/components/documents/document-uploader";
 
-const typeIcon: Record<
-  string,
-  React.ReactNode
-> = {
+const typeIcon: Record<string, React.ReactNode> = {
   pdf: (
     <FileText
       size={16}
@@ -80,13 +77,10 @@ function iconFor(
   mimeType: string,
   name: string
 ) {
-  const lowerName =
-    name.toLowerCase();
+  const lowerName = name.toLowerCase();
 
   if (
-    mimeType.startsWith(
-      "image/"
-    ) ||
+    mimeType.startsWith("image/") ||
     /\.(png|jpg|jpeg|webp|gif|tif|tiff|bmp|svg)$/i.test(
       lowerName
     )
@@ -95,8 +89,7 @@ function iconFor(
   }
 
   if (
-    mimeType ===
-      "application/pdf" ||
+    mimeType === "application/pdf" ||
     lowerName.endsWith(".pdf")
   ) {
     return typeIcon.pdf;
@@ -111,31 +104,21 @@ function iconFor(
   }
 
   if (
-    mimeType.includes(
-      "sheet"
-    ) ||
-    /\.(xlsx|xls|csv)$/i.test(
-      lowerName
-    )
+    mimeType.includes("sheet") ||
+    /\.(xlsx|xls|csv)$/i.test(lowerName)
   ) {
     return typeIcon.xlsx;
   }
 
   if (
-    /\.(zip|rar|7z)$/i.test(
-      lowerName
-    )
+    /\.(zip|rar|7z)$/i.test(lowerName)
   ) {
     return typeIcon.archive;
   }
 
   if (
-    mimeType.startsWith(
-      "video/"
-    ) ||
-    /\.(mp4|mov|webm)$/i.test(
-      lowerName
-    )
+    mimeType.startsWith("video/") ||
+    /\.(mp4|mov|webm)$/i.test(lowerName)
   ) {
     return typeIcon.video;
   }
@@ -210,6 +193,12 @@ export default function DocumentsPage() {
       setError("");
 
       await removeDocument(id);
+
+      /*
+       * Make sure the list reflects the
+       * server immediately after deletion.
+       */
+      await refresh();
     } catch (deleteError) {
       console.error(
         "[Documents] Document deletion failed:",
@@ -228,99 +217,83 @@ export default function DocumentsPage() {
     <AppShell>
       <div>
         {/* HEADER */}
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <h1 className="font-display text-[20px] font-bold text-ink">
-              Documents
-            </h1>
+        <div className="mb-5">
+          <h1 className="font-display text-[20px] font-bold text-ink">
+            Documents
+          </h1>
 
-            <p className="mt-0.5 text-[12px] text-muted">
-              Drawings, CAD/BIM files,
-              BOQs, contracts, reports,
-              images and project media
-            </p>
-          </div>
+          <p className="mt-0.5 text-[12px] text-muted">
+            Drawings, CAD/BIM files,
+            BOQs, contracts, reports,
+            images and project media
+          </p>
         </div>
 
-        {/* UPLOAD SECTION */}
+        {/* DRAG & DROP UPLOAD SECTION */}
         <Card className="mb-5 p-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <div>
-              <label className="mr-2 text-[11px] text-muted">
-                Upload to project:
-              </label>
+          <div className="mb-4">
+            <label className="text-[11px] text-muted">
+              Select project
+            </label>
 
-              <select
-                value={
-                  selectedUploadProject
-                }
-                onChange={(e) =>
-                  handleProjectChange(
-                    e.target.value
-                  )
-                }
-                className="rounded-md border border-line bg-surface px-2.5 py-1.5 text-[12px] outline-none"
-              >
-                <option value="">
-                  Select a project...
-                </option>
+            <select
+              value={selectedUploadProject}
+              onChange={(e) =>
+                handleProjectChange(
+                  e.target.value
+                )
+              }
+              className="mt-1.5 block w-full max-w-md rounded-md border border-line bg-surface px-2.5 py-2 text-[12px] outline-none"
+            >
+              <option value="">
+                Select a project...
+              </option>
 
-                {projects.map(
-                  (project) => (
-                    <option
-                      key={project.id}
-                      value={project.id}
-                    >
-                      {project.sheetNo} —{" "}
-                      {project.name}
-                    </option>
-                  )
-                )}
-              </select>
-            </div>
-
-            {selectedUploadProject ? (
-              <DocumentUploader
-                key={
-                  selectedUploadProject
-                }
-                target={{
-                  mode: "new",
-                  projectId:
-                    selectedUploadProject,
-                  category: "OTHER",
-                }}
-                buttonLabel="Upload files"
-                multiple
-                onComplete={
-                  refresh
-                }
-                onError={(message) =>
-                  setError(message)
-                }
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  setError(
-                    "Please select a project before uploading a file."
-                  )
-                }
-                className="rounded-md bg-ink px-3.5 py-2 text-[12.5px] font-medium text-white hover:bg-ink/90"
-              >
-                Upload files
-              </button>
-            )}
+              {projects.map(
+                (project) => (
+                  <option
+                    key={project.id}
+                    value={project.id}
+                  >
+                    {project.sheetNo} —{" "}
+                    {project.name}
+                  </option>
+                )
+              )}
+            </select>
           </div>
 
+          {selectedUploadProject ? (
+            <DocumentUploader
+              key={selectedUploadProject}
+              target={{
+                mode: "new",
+                projectId:
+                  selectedUploadProject,
+                category: "OTHER",
+              }}
+              multiple
+              onComplete={refresh}
+              onError={(message) =>
+                setError(message)
+              }
+            />
+          ) : (
+            <div className="rounded-lg border-2 border-dashed border-line bg-vellum/30 p-8 text-center">
+              <p className="text-[13px] font-medium text-ink">
+                Select a project first
+              </p>
+
+              <p className="mt-1 text-[11.5px] text-muted">
+                Select the project where
+                your files should be stored.
+              </p>
+            </div>
+          )}
+
           <p className="mt-3 text-[11px] text-muted">
-            Select a project, click
-            <strong className="mx-1 font-medium text-ink">
-              Upload files
-            </strong>
-            and choose your file from
-            your computer. The upload
+            Drag and drop one or more files
+            into the area above. Uploading
             starts automatically.
           </p>
         </Card>
@@ -357,12 +330,8 @@ export default function DocumentsPage() {
 
               setFilterProject(value);
 
-              if (
-                value !== "all"
-              ) {
-                setUploadProject(
-                  value
-                );
+              if (value !== "all") {
+                setUploadProject(value);
               }
 
               setError("");
@@ -396,12 +365,12 @@ export default function DocumentsPage() {
 
         {/* DOCUMENTS TABLE */}
         <Card className="overflow-hidden">
-          {visible.length ===
-          0 ? (
+          {visible.length === 0 ? (
             <div className="p-8 text-center text-[12.5px] text-muted">
               No documents yet.
-              Upload one above to
-              get started.
+              Drag a file into the
+              upload area above to get
+              started.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -434,9 +403,7 @@ export default function DocumentsPage() {
                   {visible.map(
                     (file) => (
                       <tr
-                        key={
-                          file.id
-                        }
+                        key={file.id}
                         className="border-t border-line transition-colors hover:bg-vellum/40"
                       >
                         {/* FILE */}
@@ -448,23 +415,17 @@ export default function DocumentsPage() {
                             )}
 
                             <span className="max-w-[300px] truncate font-medium text-ink">
-                              {
-                                file.name
-                              }
+                              {file.name}
                             </span>
                           </div>
                         </td>
 
                         {/* PROJECT */}
                         <td className="px-4 py-3 font-mono text-[11px] text-muted">
-                          {file
-                            .project
-                            ?.sheetNo ||
+                          {file.project?.sheetNo ||
                             "—"}{" "}
                           —{" "}
-                          {file
-                            .project
-                            ?.name ||
+                          {file.project?.name ||
                             "Unknown project"}
                         </td>
 
@@ -498,9 +459,7 @@ export default function DocumentsPage() {
                               aria-label={`Download ${file.name}`}
                             >
                               <Download
-                                size={
-                                  15
-                                }
+                                size={15}
                               />
                             </a>
 
@@ -517,9 +476,7 @@ export default function DocumentsPage() {
                               aria-label={`Delete ${file.name}`}
                             >
                               <Trash2
-                                size={
-                                  15
-                                }
+                                size={15}
                               />
                             </button>
                           </div>
