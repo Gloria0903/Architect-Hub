@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { canAccessProject } from "@/lib/rbac";
+import { calculateProjectProgress } from "@/lib/project-progress";
 
 type RouteContext = {
   params: Promise<{
@@ -199,74 +200,15 @@ export async function PATCH(
     });
 
   if (projectData) {
-    const totalWeight =
-      projectData.tasks.reduce(
-        (sum, item) =>
-          sum + Math.max(item.weight, 0),
-        0
-      );
-
-    const taskProgress =
-      totalWeight > 0
-        ? Math.round(
-            projectData.tasks.reduce(
-              (sum, item) =>
-                sum +
-                Math.min(
-                  Math.max(
-                    item.completion,
-                    0
-                  ),
-                  100
-                ) *
-                  Math.max(
-                    item.weight,
-                    0
-                  ),
-              0
-            ) / totalWeight
-          )
-        : 0;
-
-    const milestoneWeight =
-      projectData.milestones.reduce(
-        (sum, item) =>
-          sum + Math.max(item.weight, 0),
-        0
-      );
-
-    const milestoneProgress =
-      milestoneWeight > 0
-        ? Math.round(
-            (projectData.milestones.reduce(
-              (sum, item) =>
-                sum +
-                (
-                  item.status === "COMPLETED" ||
-                  item.status === "APPROVED"
-                    ? Math.max(
-                        item.weight,
-                        0
-                      )
-                    : 0
-                ),
-              0
-            ) /
-              milestoneWeight) *
-              100
-          )
-        : 0;
-
-    const calculatedProgress =
-      projectData.tasks.length > 0 &&
-      projectData.milestones.length > 0
-        ? Math.round(
-            taskProgress * 0.8 +
-              milestoneProgress * 0.2
-          )
-        : projectData.tasks.length > 0
-          ? taskProgress
-          : milestoneProgress;
+    // Single source of truth for the formula -- see
+    // src/lib/project-progress.ts. This used to be a hand-copied version
+    // of the same math living here too, which risked silently drifting
+    // out of sync with the real implementation if the formula ever
+    // changed in one place and not the other.
+    const calculatedProgress = calculateProjectProgress({
+      tasks: projectData.tasks,
+      milestones: projectData.milestones,
+    });
 
     await prisma.project.update({
       where: { id },

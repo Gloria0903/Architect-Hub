@@ -110,6 +110,7 @@ export default function ProjectsPage() {
         </div>
 
         <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[12px]">
             <thead className="bg-vellum">
               <tr className="text-muted text-left">
@@ -167,6 +168,7 @@ export default function ProjectsPage() {
               })}
             </tbody>
           </table>
+          </div>
           {visible.length === 0 && <div className="text-center py-10 text-muted text-[12.5px]">No projects match this filter.</div>}
         </Card>
 

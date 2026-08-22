@@ -1,16 +1,30 @@
 "use client";
+import { useState } from "react";
+import { Menu } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ProfileMenu } from "@/components/layout/profile-menu";
 import { useStore } from "@/store/app-store";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { loading, error } = useStore();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-vellum">
-      <Sidebar />
-      <main className="flex-1 p-6 lg:p-7 overflow-x-hidden">
-        <div className="flex justify-end mb-3">
+      <Sidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
+      <main className="flex-1 p-4 sm:p-6 lg:p-7 overflow-x-hidden min-w-0">
+        <div className="flex items-center justify-between mb-3">
+          {/* Hamburger trigger, mobile only -- the sidebar is always
+              visible at lg and up, so this has nothing to do there. */}
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Open menu"
+            className="lg:hidden text-muted hover:text-ink p-1.5 -ml-1.5 rounded-md hover:bg-white/60"
+          >
+            <Menu size={20} />
+          </button>
+          <div className="flex-1" />
           <ProfileMenu />
         </div>
         {loading ? (

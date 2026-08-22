@@ -398,7 +398,7 @@ export default function FinancePage() {
         {/* SUMMARY KPIs */}
         {/* ------------------------------------------------------------------ */}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
           {/* CONTRACT VALUE */}
 
           <Card className="p-3.5">
