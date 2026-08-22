@@ -4,7 +4,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { useStore } from "@/store/app-store";
-import { Plus, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { Plus, ChevronDown, ChevronUp, AlertTriangle, Paperclip, FileText } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
 
@@ -69,7 +69,7 @@ const [expandedId, setExpandedId] = useState<string | null>(null);
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <select value={filterProject} onChange={e => setFilterProject(e.target.value)} className="border border-line rounded-md px-2.5 py-1.5 text-[12px] bg-surface outline-none">
             <option value="all">All projects</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.sheetNo} — {p.name}</option>)}
+            {projects.map(p => <option key={p.id} value={p.id}>{p.sheetNo} â€” {p.name}</option>)}
           </select>
           <select value={filterAuthor} onChange={e => setFilterAuthor(e.target.value)} className="border border-line rounded-md px-2.5 py-1.5 text-[12px] bg-surface outline-none">
             <option value="all">All staff</option>
@@ -94,9 +94,14 @@ const [expandedId, setExpandedId] = useState<string | null>(null);
                       <div className="flex items-center gap-2">
                         <span className="text-ink font-medium text-[13px]">{author?.name}</span>
                         {isToday && <span className="text-[10px] bg-blueprint-bg text-blueprint px-1.5 py-0.5 rounded-[3px] font-medium">Today</span>}
+                        {!!log.attachments?.length && (
+                          <span className="flex items-center gap-0.5 text-[10px] bg-vellum text-muted px-1.5 py-0.5 rounded-[3px] font-medium">
+                            <Paperclip size={9} />{log.attachments.length}
+                          </span>
+                        )}
                       </div>
                       <div className="text-muted text-[11.5px] mt-0.5">
-                        <span className="font-mono">{project?.sheetNo}</span> — {project?.name}
+                        <span className="font-mono">{project?.sheetNo}</span> â€” {project?.name}
                       </div>
                     </div>
                   </div>
@@ -126,6 +131,27 @@ const [expandedId, setExpandedId] = useState<string | null>(null);
                       <div className="text-muted text-[11px] mb-1 uppercase tracking-wide">Next actions</div>
                       <p className="text-ink leading-relaxed">{log.nextActions}</p>
                     </div>
+                    {!!log.attachments?.length && (
+                      <div className="md:col-span-2">
+                        <div className="text-muted text-[11px] mb-1.5 uppercase tracking-wide flex items-center gap-1">
+                          <Paperclip size={11} />Attached files ({log.attachments.length})
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          {log.attachments.map(doc => (
+                            <a
+                              key={doc.id}
+                              href={doc.fileUrl}
+                              onClick={e => e.stopPropagation()}
+                              className="flex items-center gap-2 text-[12px] text-ink hover:text-blueprint rounded-md border border-line px-2.5 py-1.5 bg-surface"
+                            >
+                              <FileText size={13} className="text-muted shrink-0" />
+                              <span className="truncate">{doc.name}</span>
+                              <span className="ml-auto text-[10.5px] text-muted font-mono shrink-0">{(doc.fileSize / 1024).toFixed(0)} KB</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="md:col-span-2 border-t border-line pt-3 flex items-center justify-between text-[11px] text-muted font-mono">
                       <span>Submitted at {new Date(log.submittedAt).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}</span>
                       <span>Progress updated to {log.progress}%</span>

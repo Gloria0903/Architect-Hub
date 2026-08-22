@@ -84,6 +84,17 @@ export async function GET(req: NextRequest) {
           sheetNo: true,
         },
       },
+
+      attachments: {
+        where: { deletedAt: null, isLatest: true },
+        select: {
+          id: true,
+          name: true,
+          fileUrl: true,
+          fileSize: true,
+          mimeType: true,
+        },
+      },
     },
 
     orderBy: {
@@ -264,6 +275,16 @@ export async function POST(req: NextRequest) {
             id: true,
             name: true,
             sheetNo: true,
+          },
+        },
+
+        attachments: {
+          select: {
+            id: true,
+            name: true,
+            fileUrl: true,
+            fileSize: true,
+            mimeType: true,
           },
         },
       },

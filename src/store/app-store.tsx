@@ -10,8 +10,9 @@ import {
   ReactNode,
 } from "react";
 import { useSession } from "next-auth/react";
+import { isFilePickerCooldownActive } from "@/lib/file-picker-guard";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type Role = "ADMIN" | "ARCHITECT";
 
@@ -44,7 +45,7 @@ export type NotificationType =
   | "SUCCESS"
   | "ERROR";
 
-// ─── Interfaces ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Interfaces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface StaffMember {
   id: string;
@@ -171,6 +172,14 @@ export interface DailyLog {
   progress: number;
 
   submittedAt: string;
+
+  attachments?: {
+    id: string;
+    name: string;
+    fileUrl: string;
+    fileSize: number;
+    mimeType: string;
+  }[];
 }
 
 export interface ClientComment {
@@ -258,7 +267,7 @@ export interface Document {
   clientVisible?: boolean;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function formatKsh(n: number) {
   return new Intl.NumberFormat("en-KE", {
@@ -313,7 +322,7 @@ export function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// ─── API Helper ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ API Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function apiFetch<T>(
   url: string,
@@ -446,7 +455,7 @@ async function apiFetch<T>(
   }
 }
 
-// ─── Application State ───────────────────────────────────────────────────────
+// â”€â”€â”€ Application State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface AppState {
   staff: StaffMember[];
@@ -462,7 +471,7 @@ interface AppState {
   error: string | null;
 }
 
-// ─── Application Actions ─────────────────────────────────────────────────────
+// â”€â”€â”€ Application Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface AppActions {
   refresh: () => Promise<void>;
@@ -544,7 +553,7 @@ interface AppActions {
     pendingWork: string;
     nextActions: string;
     progress: number;
-  }) => Promise<void>;
+  }) => Promise<{ id: string }>;
 
   addComment: (c: {
     projectId: string;
@@ -592,13 +601,13 @@ interface AppActions {
   removeAvatar: () => Promise<void>;
 }
 
-// ─── Context ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Context â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const Ctx = createContext<
   (AppState & AppActions) | null
 >(null);
 
-// ─── Provider ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Provider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function AppProvider({
   children,
@@ -631,7 +640,7 @@ export function AppProvider({
   /*
    * Prevent multiple refresh calls from executing
    * simultaneously. If a call comes in while one is already
-   * running, we don't just hand back the in-flight promise as-is —
+   * running, we don't just hand back the in-flight promise as-is â€”
    * that promise may have been *started* before this caller's own
    * mutation (e.g. an avatar or document upload) finished writing to
    * the server, so its snapshot would be stale by the time it
@@ -643,7 +652,7 @@ export function AppProvider({
     useRef<Promise<void> | null>(null);
   const refreshQueued = useRef(false);
 
-  // ─── Refresh all staff data ───────────────────────────────────────────────
+  // â”€â”€â”€ Refresh all staff data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const refresh = useCallback(async (): Promise<void> => {
     if (!isStaffSession) {
@@ -751,7 +760,7 @@ export function AppProvider({
 
     const promise = runOnce().then(() => {
       // If another caller asked for a refresh while this run was in
-      // flight, their write may have landed after our fetch started —
+      // flight, their write may have landed after our fetch started â€”
       // run once more immediately so they get a fresh snapshot instead
       // of silently keeping whatever we just fetched.
       if (refreshQueued.current) {
@@ -769,7 +778,7 @@ export function AppProvider({
     return promise;
   }, [isStaffSession]);
 
-  // ─── Initial data load ────────────────────────────────────────────────────
+  // â”€â”€â”€ Initial data load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   useEffect(() => {
   if (status === "loading") {
@@ -781,7 +790,7 @@ export function AppProvider({
   }
 }, [status, isStaffSession, refresh]);
 
-  // ─── Keep data fresh ──────────────────────────────────────────────────────
+  // â”€â”€â”€ Keep data fresh â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   useEffect(() => {
     if (!isStaffSession) {
@@ -791,7 +800,8 @@ export function AppProvider({
     const refreshIfVisible = () => {
       if (
         document.visibilityState ===
-        "visible"
+          "visible" &&
+        !isFilePickerCooldownActive()
       ) {
         void refresh();
       }
@@ -803,6 +813,13 @@ export function AppProvider({
     );
 
     const onFocus = () => {
+      // Skip the refresh if focus just returned from a native OS file
+      // picker â€” otherwise this can wipe out a file the user just picked
+      // before the upload's onChange handler gets to read it.
+      // See src/lib/file-picker-guard.ts.
+      if (isFilePickerCooldownActive()) {
+        return;
+      }
       void refresh();
     };
 
@@ -838,7 +855,7 @@ export function AppProvider({
     refresh,
   ]);
 
-  // ─── Staff ────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Staff â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const addStaff = useCallback(
     async (
@@ -900,7 +917,7 @@ export function AppProvider({
     [refresh]
   );
 
-  // ─── Clients ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Clients â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const addClient = useCallback(
     async (
@@ -953,7 +970,7 @@ export function AppProvider({
     [refresh]
   );
 
-  // ─── Projects ─────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Projects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const addProject = useCallback(
     async (
@@ -1033,7 +1050,7 @@ export function AppProvider({
       [refresh]
     );
 
-  // ─── Daily Logs ───────────────────────────────────────────────────────────
+  // â”€â”€â”€ Daily Logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const addLog = useCallback(
     async (
@@ -1041,7 +1058,7 @@ export function AppProvider({
         AppActions["addLog"]
       >[0]
     ) => {
-      await apiFetch(
+      const created = await apiFetch<{ id: string }>(
         "/api/logs",
         {
           method: "POST",
@@ -1050,11 +1067,13 @@ export function AppProvider({
       );
 
       await refresh();
+
+      return created;
     },
     [refresh]
   );
 
-  // ─── Comments ─────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Comments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const addComment = useCallback(
     async (
@@ -1093,7 +1112,7 @@ export function AppProvider({
     [refresh]
   );
 
-  // ─── Payments ─────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Payments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const addPayment = useCallback(
     async (
@@ -1114,7 +1133,7 @@ export function AppProvider({
     [refresh]
   );
 
-  // ─── Notifications ───────────────────────────────────────────────────────
+  // â”€â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const markNotificationRead =
     useCallback(
@@ -1143,7 +1162,7 @@ export function AppProvider({
       []
     );
 
-  // ─── Document Upload ──────────────────────────────────────────────────────
+  // â”€â”€â”€ Document Upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const uploadDocument =
     useCallback(
@@ -1343,7 +1362,7 @@ export function AppProvider({
       [refresh]
     );
 
-  // ─── Documents ────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Documents â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const removeDocument =
     useCallback(
@@ -1381,7 +1400,7 @@ export function AppProvider({
       [refresh]
     );
 
-  // ─── Avatar ───────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Avatar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const uploadAvatar = useCallback(
     async (file: File) => {
@@ -1504,7 +1523,7 @@ export function AppProvider({
       [refresh, session?.user?.id]
     );
 
-  // ─── Provider ─────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Provider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   return (
     <Ctx.Provider
@@ -1548,7 +1567,7 @@ export function AppProvider({
   );
 }
 
-// ─── Hook ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Hook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function useStore() {
   const ctx = useContext(Ctx);

@@ -13,7 +13,7 @@ import {
 
 import { useStore } from "@/store/app-store";
 
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Paperclip } from "lucide-react";
 
 import { DocumentUploader } from "@/components/documents/document-uploader";
 
@@ -28,8 +28,15 @@ export default function NewDailyLogPage() {
     refresh,
   } = useStore();
 
-  const [submitted, setSubmitted] =
-    useState(false);
+  // Two-phase flow: the log itself is submitted first (so it exists as a
+  // real record with an id), THEN attachments are uploaded tied to that
+  // specific log entry via dailyLogId â€” rather than being only loosely
+  // associated with the project the whole time.
+  const [createdLogId, setCreatedLogId] =
+    useState<string | null>(null);
+
+  const [attachedCount, setAttachedCount] =
+    useState(0);
 
   const [submitting, setSubmitting] =
     useState(false);
@@ -86,7 +93,7 @@ export default function NewDailyLogPage() {
     setSubmitting(true);
 
     try {
-      await addLog({
+      const created = await addLog({
         projectId: form.projectId,
         workCompleted:
           form.workCompleted.trim(),
@@ -99,18 +106,8 @@ export default function NewDailyLogPage() {
         progress,
       });
 
-      /*
-       * Files uploaded through the
-       * DocumentUploader are already
-       * associated with the selected
-       * project.
-       */
-
-      setSubmitted(true);
-
-      setTimeout(() => {
-        router.push("/daily-logs");
-      }, 1800);
+      // Move to the attach-files step now that the log has a real id.
+      setCreatedLogId(created.id);
     } catch (err) {
       const message =
         err instanceof Error &&
@@ -124,27 +121,72 @@ export default function NewDailyLogPage() {
     }
   }
 
-  if (submitted) {
+  function finish() {
+    router.push("/daily-logs");
+  }
+
+  if (createdLogId) {
     return (
       <AppShell>
-        <div className="mx-auto mt-20 max-w-lg text-center">
-          <CheckCircle
-            size={48}
-            className="mx-auto mb-4 text-moss"
-          />
+        <div className="mx-auto mt-10 max-w-lg">
+          <div className="mb-5 text-center">
+            <CheckCircle
+              size={40}
+              className="mx-auto mb-3 text-moss"
+            />
 
-          <h2 className="font-display text-[18px] font-bold text-ink">
-            Log submitted
-          </h2>
+            <h2 className="font-display text-[18px] font-bold text-ink">
+              Log submitted
+            </h2>
 
-          <p className="mt-1 text-[12.5px] text-muted">
-            Your daily log was submitted
-            successfully.
-          </p>
+            <p className="mt-1 text-[12.5px] text-muted">
+              Attach drawings, site photos, or other files to today&apos;s entry â€” optional.
+            </p>
+          </div>
 
-          <p className="mt-1 text-[12px] text-muted">
-            Redirecting to daily logs…
-          </p>
+          <Card className="p-5">
+            <label className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted">
+              <Paperclip size={12} />
+              Attach files to this log entry
+            </label>
+
+            <DocumentUploader
+              target={{
+                mode: "new",
+                projectId: form.projectId,
+                category: "SITE_REPORT",
+                dailyLogId: createdLogId,
+              }}
+              multiple
+              onComplete={async () => {
+                setAttachedCount((n) => n + 1);
+                await refresh();
+              }}
+              onError={setUploadError}
+            />
+
+            {uploadError && (
+              <p className="mt-1.5 text-[12px] text-brick">
+                {uploadError}
+              </p>
+            )}
+
+            {attachedCount > 0 && (
+              <p className="mt-2 text-[11.5px] text-moss">
+                {attachedCount} file{attachedCount === 1 ? "" : "s"} attached to this log entry.
+              </p>
+            )}
+
+            <div className="mt-4 flex justify-end border-t border-line pt-3">
+              <button
+                type="button"
+                onClick={finish}
+                className="rounded-md bg-ink px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink/90"
+              >
+                {attachedCount > 0 ? "Done" : "Skip â€” no attachments"}
+              </button>
+            </div>
+          </Card>
         </div>
       </AppShell>
     );
@@ -160,7 +202,9 @@ export default function NewDailyLogPage() {
         <p className="mb-5 text-[12px] text-muted">
           Required before close of business
           each day. All entries are permanent
-          and visible to supervisors.
+          and visible to supervisors. You&apos;ll
+          be able to attach files to this
+          entry on the next step.
         </p>
 
         <Card className="p-5">
@@ -184,7 +228,6 @@ export default function NewDailyLogPage() {
                   }));
 
                   setError("");
-                  setUploadError("");
                 }}
               >
                 <option value="">
@@ -196,7 +239,7 @@ export default function NewDailyLogPage() {
                     key={project.id}
                     value={project.id}
                   >
-                    {project.sheetNo} —{" "}
+                    {project.sheetNo} â€”{" "}
                     {project.name}
                   </option>
                 ))}
@@ -226,7 +269,7 @@ export default function NewDailyLogPage() {
 
                   setError("");
                 }}
-                placeholder="Describe what was completed today in detail…"
+                placeholder="Describe what was completed today in detailâ€¦"
               />
 
               <div className="mt-1 flex items-center justify-between">
@@ -268,7 +311,7 @@ export default function NewDailyLogPage() {
                       e.target.value,
                   }))
                 }
-                placeholder="Any blockers, delays, or issues to flag…"
+                placeholder="Any blockers, delays, or issues to flagâ€¦"
               />
             </Field>
 
@@ -286,7 +329,7 @@ export default function NewDailyLogPage() {
                       e.target.value,
                   }))
                 }
-                placeholder="What remains outstanding…"
+                placeholder="What remains outstandingâ€¦"
               />
             </Field>
 
@@ -304,7 +347,7 @@ export default function NewDailyLogPage() {
                       e.target.value,
                   }))
                 }
-                placeholder="What happens next and by when…"
+                placeholder="What happens next and by whenâ€¦"
               />
             </Field>
 
@@ -334,47 +377,6 @@ export default function NewDailyLogPage() {
                 from the completion of project
                 deliverables.
               </p>
-            </div>
-
-            {/* ATTACHMENTS */}
-            <div>
-              <label className="mb-1.5 block text-[12px] text-muted">
-                Attach files (optional)
-              </label>
-
-              {form.projectId ? (
-                <DocumentUploader
-                  key={form.projectId}
-                  target={{
-                    mode: "new",
-                    projectId:
-                      form.projectId,
-                    category:
-                      "SITE_REPORT",
-                  }}
-                  multiple
-                  onComplete={refresh}
-                  onError={setUploadError}
-                />
-              ) : (
-                <div className="rounded-lg border-2 border-dashed border-line bg-vellum/30 p-8 text-center">
-                  <p className="text-[13px] font-medium text-ink">
-                    Select a project first
-                  </p>
-
-                  <p className="mt-1 text-[11.5px] text-muted">
-                    After selecting a project,
-                    drag and drop your drawings,
-                    photos, or documents here.
-                  </p>
-                </div>
-              )}
-
-              {uploadError && (
-                <p className="mt-1.5 text-[12px] text-brick">
-                  {uploadError}
-                </p>
-              )}
             </div>
 
             {/* ERROR */}
@@ -410,8 +412,8 @@ export default function NewDailyLogPage() {
                 className="rounded-md bg-ink px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink/90 disabled:opacity-60"
               >
                 {submitting
-                  ? "Submitting…"
-                  : "Submit log"}
+                  ? "Submittingâ€¦"
+                  : "Submit log â€” then attach files"}
               </button>
             </div>
           </form>

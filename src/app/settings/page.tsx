@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,26 @@ import { CheckCircle, Camera, Trash2 } from "lucide-react";
 import { MfaSettingsCard } from "@/components/settings/mfa-card";
 import { FirmSettingsCard } from "@/components/settings/firm-settings-card";
 import { Avatar } from "@/components/ui/avatar";
+import { notifyFilePickerOpening } from "@/lib/file-picker-guard";
+
+interface FirmProfile {
+  firmName: string;
+  country: string;
+  currency: string;
+  timezone: string;
+}
+
+const NOTIFICATION_TOGGLES: {
+  key: "notifyLogReminder" | "notifyProjectDelay" | "notifyClientComment" | "notifyWeeklySummary";
+  label: string;
+}[] = [
+  { key: "notifyLogReminder", label: "Email reminder when daily log is not submitted by 5:00pm" },
+  { key: "notifyProjectDelay", label: "Email alert when a project becomes delayed" },
+  { key: "notifyClientComment", label: "In-app notification on new client comment" },
+  { key: "notifyWeeklySummary", label: "Email summary every Monday morning" },
+];
+
+type NotificationPrefs = Record<typeof NOTIFICATION_TOGGLES[number]["key"], boolean>;
 
 export default function SettingsPage() {
   const { staff, updateStaff, uploadAvatar, removeAvatar } = useStore();
@@ -22,6 +42,54 @@ export default function SettingsPage() {
   const [form, setForm] = useState({ name: me?.name ?? session?.user?.name ?? "", phone: me?.phone ?? "", password: "" });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+
+  // Firm profile â€” real data (was hardcoded "Architect Hub Demo Firm" etc.)
+  const [firm, setFirm] = useState<FirmProfile | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings/firm")
+      .then(res => res.json())
+      .then(setFirm)
+      .catch(() => setFirm(null));
+  }, []);
+
+  // Notification preferences â€” real, persisted per user (were non-functional placeholders)
+  const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
+  const [prefsSaving, setPrefsSaving] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings/notifications")
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => data && setPrefs(data))
+      .catch(() => {});
+  }, []);
+
+  const togglePref = useCallback(async (key: keyof NotificationPrefs) => {
+    if (!prefs) return;
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    setPrefsSaving(key);
+    try {
+      const res = await fetch("/api/settings/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [key]: next[key] }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      // Revert on failure
+      setPrefs(prefs);
+    } finally {
+      setPrefsSaving(null);
+    }
+  }, [prefs]);
+
+  function openFilePicker() {
+    // See src/lib/file-picker-guard.ts â€” prevents AppProvider's window-focus
+    // refresh from wiping the selected file when the OS dialog closes.
+    notifyFilePickerOpening();
+    fileInputRef.current?.click();
+  }
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -74,15 +142,22 @@ export default function SettingsPage() {
         <p className="text-muted text-[12px] mb-5">Firm configuration and your profile</p>
 
         <div className="flex flex-col gap-3">
-          <Card className="p-4">
-            <div className="font-medium text-ink text-[13px] mb-3">Firm profile</div>
-            <div className="grid grid-cols-2 gap-3 text-[12.5px]">
-              <div><div className="text-muted mb-1">Firm name</div><div className="text-ink">Architect Hub Demo Firm</div></div>
-              <div><div className="text-muted mb-1">Country</div><div className="text-ink">Kenya</div></div>
-              <div><div className="text-muted mb-1">Currency</div><div className="text-ink font-mono">KES (Kenyan Shilling)</div></div>
-              <div><div className="text-muted mb-1">Timezone</div><div className="text-ink">Africa/Nairobi (EAT)</div></div>
-            </div>
-          </Card>
+          {!isAdmin && (
+            <Card className="p-4">
+              <div className="font-medium text-ink text-[13px] mb-3">Firm profile</div>
+              {firm ? (
+                <div className="grid grid-cols-2 gap-3 text-[12.5px]">
+                  <div><div className="text-muted mb-1">Firm name</div><div className="text-ink">{firm.firmName}</div></div>
+                  <div><div className="text-muted mb-1">Country</div><div className="text-ink">{firm.country}</div></div>
+                  <div><div className="text-muted mb-1">Currency</div><div className="text-ink font-mono">{firm.currency}</div></div>
+                  <div><div className="text-muted mb-1">Timezone</div><div className="text-ink">{firm.timezone}</div></div>
+                </div>
+              ) : (
+                <p className="text-muted text-[12px]">Loadingâ€¦</p>
+              )}
+              <p className="text-muted text-[11px] mt-3">Only an admin can change these â€” see your firm admin to update them.</p>
+            </Card>
+          )}
 
           <Card className="p-4">
             <div className="flex items-center gap-3 mb-4">
@@ -90,7 +165,7 @@ export default function SettingsPage() {
                 <Avatar avatarUrl={me?.avatarUrl} initials={session?.user?.initials ?? "?"} name={session?.user?.name ?? undefined} size={56} fontSize={18} />
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={openFilePicker}
                   disabled={avatarBusy}
                   title="Upload photo"
                   className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-ink text-white flex items-center justify-center border-2 border-surface disabled:opacity-50"
@@ -107,7 +182,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex-1">
                 <div className="text-ink font-medium">{session?.user?.name}</div>
-                <div className="text-muted text-[12px]">{session?.user?.email} · {session?.user?.role ? roleLabel(session.user.role as Role) : ""}</div>
+                <div className="text-muted text-[12px]">{session?.user?.email} Â· {session?.user?.role ? roleLabel(session.user.role as Role) : ""}</div>
                 {me?.avatarUrl && (
                   <button
                     type="button"
@@ -142,22 +217,28 @@ export default function SettingsPage() {
 
           <Card className="p-4">
             <div className="font-medium text-ink text-[13px] mb-3">Notifications</div>
-            <div className="flex flex-col gap-2.5 text-[12.5px]">
-              {[
-                "Email reminder when daily log is not submitted by 5:00pm",
-                "Email alert when a project becomes delayed",
-                "In-app notification on new client comment",
-                "Email summary every Monday morning",
-              ].map((n, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <span className="text-ink">{n}</span>
-                  <div className="w-8 h-4 bg-moss rounded-full relative cursor-pointer shrink-0 ml-3">
-                    <div className="w-3 h-3 bg-white rounded-full absolute right-0.5 top-0.5" />
+            {prefs ? (
+              <div className="flex flex-col gap-2.5 text-[12.5px]">
+                {NOTIFICATION_TOGGLES.map(({ key, label }) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="text-ink">{label}</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={prefs[key]}
+                      disabled={prefsSaving === key}
+                      onClick={() => togglePref(key)}
+                      className={`w-8 h-4 rounded-full relative cursor-pointer shrink-0 ml-3 transition-colors disabled:opacity-50 ${prefs[key] ? "bg-moss" : "bg-line"}`}
+                    >
+                      <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all ${prefs[key] ? "right-0.5" : "left-0.5"}`} />
+                    </button>
                   </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-muted text-[11px] mt-3">Email delivery isn&apos;t wired up yet — these toggles are placeholders for the notification preferences that will control it.</p>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted text-[12px]">Loadingâ€¦</p>
+            )}
+            <p className="text-muted text-[11px] mt-3">These control which emails and in-app notifications you receive. Changes save immediately.</p>
           </Card>
         </div>
       </div>

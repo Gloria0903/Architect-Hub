@@ -29,6 +29,10 @@ model User {
   passwordChangedAt   DateTime                @default(now())
   avatarKey           String?
   avatarUrl           String?
+  notifyLogReminder   Boolean                 @default(true)
+  notifyProjectDelay  Boolean                 @default(true)
+  notifyClientComment Boolean                 @default(true)
+  notifyWeeklySummary Boolean                 @default(true)
   activityLogs        ActivityLog[]
   fromAssignments     AssignmentRecord[]      @relation("FromArchitect")
   assignmentsMade     AssignmentRecord[]      @relation("PerformedByUser")
@@ -181,6 +185,7 @@ model DailyLog {
   authorId      String
   author        User     @relation(fields: [authorId], references: [id])
   project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attachments   Document[]
 
   @@unique([projectId, authorId, date])
   @@index([projectId])
@@ -204,14 +209,17 @@ model Document {
   deletedAt     DateTime?
   parentId      String?
   clientVisible Boolean          @default(false)
+  dailyLogId    String?
   parent        Document?        @relation("DocumentVersions", fields: [parentId], references: [id], onDelete: Cascade)
   versions      Document[]       @relation("DocumentVersions")
   project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   uploadedBy    User             @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  dailyLog      DailyLog?        @relation(fields: [dailyLogId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([projectId, isLatest])
   @@index([parentId])
+  @@index([dailyLogId])
 }
 
 model ClientComment {
@@ -266,6 +274,9 @@ model AssignmentRecord {
 model FirmSettings {
   id        String   @id @default("singleton")
   firmName  String   @default("Architect Hub")
+  country   String   @default("Kenya")
+  currency  String   @default("KES")
+  timezone  String   @default("Africa/Nairobi")
   updatedAt DateTime @updatedAt
 }
 

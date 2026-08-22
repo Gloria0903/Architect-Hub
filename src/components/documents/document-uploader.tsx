@@ -13,12 +13,15 @@ import {
   ALLOWED_DOCUMENT_TYPES,
   validateDocumentUpload,
 } from "@/lib/document-validation";
+import { notifyFilePickerOpening } from "@/lib/file-picker-guard";
 
 type UploadTarget =
   | {
       mode: "new";
       projectId: string;
       category: string;
+      /** Links the upload to a specific daily log entry (optional). */
+      dailyLogId?: string;
     }
   | {
       mode: "version";
@@ -95,6 +98,13 @@ function buildFormData(
       "category",
       target.category
     );
+
+    if (target.dailyLogId) {
+      formData.append(
+        "dailyLogId",
+        target.dailyLogId
+      );
+    }
   }
 
   return formData;
@@ -493,6 +503,11 @@ export function DocumentUploader({
        * file again still triggers onChange.
        */
       input.value = "";
+
+      // Tell AppProvider's focus-refresh listener to stand down for a
+      // couple seconds â€” see src/lib/file-picker-guard.ts for why.
+      notifyFilePickerOpening();
+
       input.click();
     }, [uploading, onError]);
 

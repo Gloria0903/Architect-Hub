@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { authenticator } from "otplib";
 import { z } from "zod";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 const Schema = z.object({
   secret: z.string().min(1),
@@ -11,8 +12,8 @@ const Schema = z.object({
 
 /**
  * The only place mfaEnabled/mfaSecret actually get written. Requires a
- * real, currently-valid code generated from this exact secret — proof
- * the QR was scanned correctly — before turning MFA on. This is what
+ * real, currently-valid code generated from this exact secret â€” proof
+ * the QR was scanned correctly â€” before turning MFA on. This is what
  * guarantees nobody can lock themselves out of their own account: if the
  * scan didn't work, this call fails and the account is untouched.
  */
@@ -20,6 +21,18 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // A 6-digit TOTP code is brute-forceable (1M combinations) if left
+  // unlimited. Keyed by user id (not just IP) since this is a session-gated
+  // endpoint â€” one legitimate user shouldn't be able to hammer their own
+  // code endlessly either.
+  const limited = rateLimit(`mfa-confirm:${session.user.id}:${getClientIp(req)}`, 5, 5 * 60 * 1000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Please wait a few minutes and try again." },
+      { status: 429 }
+    );
   }
 
   const parsed = Schema.safeParse(await req.json());
