@@ -39,6 +39,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://architect_hub:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/architect_hub
+      DIRECT_URL: postgresql://architect_hub:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/architect_hub
       REDIS_URL: redis://redis:6379
       AUTH_SECRET: ${AUTH_SECRET}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
@@ -64,6 +65,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://architect_hub:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/architect_hub
+      DIRECT_URL: postgresql://architect_hub:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/architect_hub
       REDIS_URL: redis://redis:6379
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}

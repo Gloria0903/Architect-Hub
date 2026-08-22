@@ -12,26 +12,62 @@
  * React's onChange handler for the file input has run â€” so the selected
  * file is silently lost and the user has to try again with no error shown.
  *
- * FIX
- * ---
- * Anything that is about to open a native file picker calls
- * `notifyFilePickerOpening()` first. That starts a short cooldown window.
- * AppProvider's focus/visibility handlers check `isFilePickerCooldownActive()`
- * and skip the refresh while the cooldown is active, giving the file input's
- * onChange time to run first. The refresh simply happens on the next
- * interval tick or the next real focus event instead â€” nothing is lost.
+ * FIX (v2 -- state-based, not time-based)
+ * ----------------------------------------
+ * An earlier version of this file used a fixed cooldown timer starting
+ * when the picker opened. That was wrong: a native file dialog can stay
+ * open for as long as the person takes to browse to a file -- seconds or
+ * minutes -- so a short fixed timer expires before the dialog even
+ * closes, and the bug comes right back.
+ *
+ * This version instead tracks a simple "is a picker currently open" flag
+ * with no time limit. It's set the moment a picker is triggered, and
+ * cleared the moment the window regains focus afterward -- however long
+ * that takes. AppProvider skips exactly one refresh (the one caused by
+ * the picker closing) and resumes normal behavior immediately after.
+ *
+ * A long safety-net timeout exists only to prevent a permanently-stuck
+ * flag in the rare case a picker is triggered but never actually opens.
  */
 
-const COOLDOWN_MS = 2000;
+const SAFETY_NET_MS = 5 * 60 * 1000; // 5 minutes -- just a backstop, not the mechanism
 
-let cooldownUntil = 0;
+let pickerOpen = false;
+let safetyTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Call this immediately before triggering a native file picker (input.click()). */
 export function notifyFilePickerOpening(): void {
-  cooldownUntil = Date.now() + COOLDOWN_MS;
+  pickerOpen = true;
+
+  if (safetyTimer) clearTimeout(safetyTimer);
+  safetyTimer = setTimeout(() => {
+    pickerOpen = false;
+  }, SAFETY_NET_MS);
 }
 
-/** Whether a file picker was opened recently enough that a data refresh should be skipped. */
-export function isFilePickerCooldownActive(): boolean {
-  return Date.now() < cooldownUntil;
+/**
+ * Whether a data refresh should currently be skipped because a file
+ * picker is open (used by the 30s polling refresh, which can fire while
+ * the OS dialog is still open and visibility hasn't changed).
+ */
+export function isFilePickerOpen(): boolean {
+  return pickerOpen;
+}
+
+/**
+ * Called from the window "focus" handler. If a picker was open, this
+ * focus event is almost certainly the dialog closing -- consume the flag
+ * and tell the caller to skip exactly this one refresh. Returns false
+ * (does nothing) for every other focus event, so normal tab-switching
+ * refreshes are unaffected.
+ */
+export function consumeFilePickerReturn(): boolean {
+  if (!pickerOpen) return false;
+
+  pickerOpen = false;
+  if (safetyTimer) {
+    clearTimeout(safetyTimer);
+    safetyTimer = null;
+  }
+  return true;
 }

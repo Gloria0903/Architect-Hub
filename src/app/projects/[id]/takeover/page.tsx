@@ -29,17 +29,17 @@ import {
 } from "lucide-react";
 
 /**
- * Take Over Project — the platform's flagship "knowledge continuity" feature.
+ * Take Over Project â€” the platform's flagship "knowledge continuity" feature.
  *
  * When an architect is unavailable, whoever is picking up the project (or an
  * admin arranging the handover) needs one screen that answers "where does
  * this project actually stand right now?" without hunting through email,
  * personal folders, or the previous architect. Everything here is read from
- * the same live store the rest of the app uses — nothing is duplicated or
+ * the same live store the rest of the app uses â€” nothing is duplicated or
  * cached separately, so this can never drift from reality.
  *
  * Viewing the dossier is available to anyone with legitimate access to the
- * project (its current architect/supervisor, or an admin) — that's the
+ * project (its current architect/supervisor, or an admin) â€” that's the
  * point of continuity. Actually confirming a handover (reassigning the
  * project) is admin-gated, same as the existing reassign flow, since it's
  * a formal ownership change with notification and audit-trail consequences.
@@ -56,9 +56,16 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
 
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
+  const isSeniorArchitect = role === "SENIOR_ARCHITECT";
+  // Take-over is a project reassignment under the hood (reassignProject ->
+  // /api/projects/[id]/reassign), and that route now permits Senior
+  // Architects too (see rbac.ts canReassignProjects) -- this was left as
+  // admin-only client-side, which just meant a senior architect saw no
+  // confirm button even though the backend would have accepted the call.
+  const hasFirmWideView = isAdmin || isSeniorArchitect;
   const canView =
-    isAdmin || project.architectId === session?.user?.id || project.supervisorId === session?.user?.id;
-  const canConfirmHandover = isAdmin;
+    hasFirmWideView || project.architectId === session?.user?.id || project.supervisorId === session?.user?.id;
+  const canConfirmHandover = hasFirmWideView;
 
   const client = clients.find(c => c.id === project.clientId);
   const currentArchitect = staff.find(s => s.id === project.architectId);
@@ -111,13 +118,13 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
     const events: Ev[] = [
       ...projectLogs.map(l => ({
         id: `log-${l.id}`,
-        label: `${l.author?.name ?? "Someone"} submitted a daily log — ${l.progress}% progress`,
+        label: `${l.author?.name ?? "Someone"} submitted a daily log â€” ${l.progress}% progress`,
         timestamp: l.submittedAt,
         icon: <History size={13} className="text-blueprint" />,
       })),
       ...projectDocuments.map(d => ({
         id: `doc-${d.id}`,
-        label: `Document uploaded — ${d.name}`,
+        label: `Document uploaded â€” ${d.name}`,
         timestamp: d.uploadedAt,
         icon: <Upload size={13} className="text-blueprint" />,
       })),
@@ -129,13 +136,13 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
       })),
       ...projectPayments.map(p => ({
         id: `payment-${p.id}`,
-        label: `Payment recorded — ${formatKsh(p.amount)}`,
+        label: `Payment recorded â€” ${formatKsh(p.amount)}`,
         timestamp: `${p.date}T12:00:00`,
         icon: <Wallet size={13} className="text-moss" />,
       })),
       ...(project.assignmentHistory ?? []).map(r => ({
         id: `assign-${r.id}`,
-        label: `Reassigned to ${r.toArchitect?.name ?? "someone"}${r.reason ? ` — ${r.reason}` : ""}`,
+        label: `Reassigned to ${r.toArchitect?.name ?? "someone"}${r.reason ? ` â€” ${r.reason}` : ""}`,
         timestamp: `${r.date}T09:00:00`,
         icon: <Repeat size={13} className="text-brick" />,
       })),
@@ -153,7 +160,7 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
     if (!handoverTo) return;
     setConfirming(true);
     try {
-      await reassignProject(project.id, handoverTo, handoverReason || "Project take-over — knowledge continuity handover");
+      await reassignProject(project.id, handoverTo, handoverReason || "Project take-over â€” knowledge continuity handover");
       setConfirmed(true);
     } finally {
       setConfirming(false);
@@ -181,10 +188,10 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
         {/* Header */}
         <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
           <div>
-            <div className="font-mono text-[11.5px] text-muted">{project.sheetNo} · {project.location}</div>
+            <div className="font-mono text-[11.5px] text-muted">{project.sheetNo} Â· {project.location}</div>
             <h1 className="font-display font-bold text-[21px] text-ink mt-0.5">Take over: {project.name}</h1>
             <p className="text-muted text-[12.5px] mt-1">
-              Everything the next architect needs to pick this up with nothing lost — {client?.name}, {priorityLabel(project.priority)} priority.
+              Everything the next architect needs to pick this up with nothing lost â€” {client?.name}, {priorityLabel(project.priority)} priority.
             </p>
           </div>
           <StatusPill status={project.status} className="px-2.5 py-1" />
@@ -195,13 +202,13 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
           <div className="flex items-center gap-2.5 bg-ochre-bg text-ochre rounded-md px-4 py-2.5 mb-4 text-[12.5px]">
             <AlertTriangle size={15} className="shrink-0" />
             {latestLog
-              ? `No daily log submitted today — the last one was ${daysSinceLastLog} day${daysSinceLastLog === 1 ? "" : "s"} ago.`
+              ? `No daily log submitted today â€” the last one was ${daysSinceLastLog} day${daysSinceLastLog === 1 ? "" : "s"} ago.`
               : "No daily logs have ever been submitted for this project."}
           </div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3.5">
-          {/* Left column — the dossier */}
+          {/* Left column â€” the dossier */}
           <div className="flex flex-col gap-3.5">
             {/* Ownership */}
             <Card className="p-4">
@@ -213,7 +220,7 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
                 </div>
                 <div>
                   <div className="text-muted text-[11px]">Supervisor</div>
-                  <div className="text-ink text-[13px] font-medium mt-0.5">{supervisor?.name ?? "—"}</div>
+                  <div className="text-ink text-[13px] font-medium mt-0.5">{supervisor?.name ?? "â€”"}</div>
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-line">
@@ -221,7 +228,7 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
                 <div className="w-full h-2 bg-vellum rounded-full overflow-hidden">
                   <div className="h-full bg-blueprint rounded-full" style={{ width: `${project.progress}%` }} />
                 </div>
-                <div className="text-[11px] text-muted mt-1">{project.progress}% complete · due {new Date(project.dueDate).toLocaleDateString("en-KE", { dateStyle: "medium" })}</div>
+                <div className="text-[11px] text-muted mt-1">{project.progress}% complete Â· due {new Date(project.dueDate).toLocaleDateString("en-KE", { dateStyle: "medium" })}</div>
               </div>
             </Card>
 
@@ -231,7 +238,7 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
               {latestLog ? (
                 <div className="flex flex-col gap-3 text-[12.5px]">
                   <div>
-                    <div className="text-muted text-[11px] mb-1">Last submitted by {latestLog.author?.name} — {new Date(latestLog.date).toLocaleDateString("en-KE", { dateStyle: "medium" })}</div>
+                    <div className="text-muted text-[11px] mb-1">Last submitted by {latestLog.author?.name} â€” {new Date(latestLog.date).toLocaleDateString("en-KE", { dateStyle: "medium" })}</div>
                     <div className="text-ink leading-relaxed">{latestLog.workCompleted}</div>
                   </div>
                   {latestLog.pendingWork && (
@@ -272,7 +279,7 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
                     <div key={log.id} className="border-t border-line pt-2.5 first:border-0 first:pt-0">
                       <div className="flex items-center gap-2 text-[11px] text-muted mb-0.5">
                         <span className="font-medium text-ink">{log.author?.name}</span>
-                        <span>· {new Date(log.date).toLocaleDateString("en-KE", { dateStyle: "medium" })}</span>
+                        <span>Â· {new Date(log.date).toLocaleDateString("en-KE", { dateStyle: "medium" })}</span>
                         <span className="ml-auto font-mono">{log.progress}%</span>
                       </div>
                       <p className="text-[12px] text-ink leading-snug line-clamp-2">{log.workCompleted}</p>
@@ -298,7 +305,7 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
                         <FileText size={14} className="text-muted shrink-0" />
                         <div className="min-w-0">
                           <div className="text-ink text-[12px] font-medium truncate">{doc.name}</div>
-                          <div className="text-muted text-[10.5px] font-mono">v{doc.version} · {formatFileSize(doc.fileSize)} · {new Date(doc.uploadedAt).toLocaleDateString("en-KE")}</div>
+                          <div className="text-muted text-[10.5px] font-mono">v{doc.version} Â· {formatFileSize(doc.fileSize)} Â· {new Date(doc.uploadedAt).toLocaleDateString("en-KE")}</div>
                         </div>
                       </div>
                       <a href={doc.fileUrl} download={doc.name} className="text-blueprint shrink-0" title="Download">
@@ -337,7 +344,7 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
             </Card>
           </div>
 
-          {/* Right column — financials, approvals, timeline, action */}
+          {/* Right column â€” financials, approvals, timeline, action */}
           <div className="flex flex-col gap-3.5">
             {/* Financial status */}
             <Card className="p-4">
@@ -395,7 +402,7 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
             {canConfirmHandover && (
               <Card className="p-4">
                 <div className="font-medium text-ink text-[12.5px] mb-1">Confirm handover</div>
-                <p className="text-muted text-[11.5px] mb-3">The new architect gets instant access to everything above — nothing is re-entered or lost.</p>
+                <p className="text-muted text-[11.5px] mb-3">The new architect gets instant access to everything above â€” nothing is re-entered or lost.</p>
                 {confirmed ? (
                   <div className="flex items-center gap-2 text-moss text-[12.5px] bg-moss-bg rounded-md p-3">
                     <CheckCircle size={16} />
@@ -410,14 +417,14 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
                       </Select>
                     </Field>
                     <Field label="Handover notes">
-                      <Textarea rows={2} value={handoverReason} onChange={e => setHandoverReason(e.target.value)} placeholder="Anything the incoming architect should know that isn't already captured above…" />
+                      <Textarea rows={2} value={handoverReason} onChange={e => setHandoverReason(e.target.value)} placeholder="Anything the incoming architect should know that isn't already captured aboveâ€¦" />
                     </Field>
                     <button
                       type="submit"
                       disabled={!handoverTo || confirming}
                       className="flex items-center justify-center gap-1.5 bg-brick text-white rounded-md px-3 py-2 text-[12.5px] font-medium hover:bg-brick/90 disabled:opacity-50"
                     >
-                      <Repeat size={14} />{confirming ? "Confirming…" : "Confirm take over"}
+                      <Repeat size={14} />{confirming ? "Confirmingâ€¦" : "Confirm take over"}
                     </button>
                   </form>
                 )}

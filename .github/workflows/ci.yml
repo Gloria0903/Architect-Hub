@@ -27,7 +27,7 @@ jobs:
             # New branch or force-pushed/rewritten history: there is no valid
             # 'before' commit to diff against. Silently skipping here is
             # exactly how a dangerous file previously slipped back in via a
-            # squashed history rewrite — so instead diff the full tree at
+            # squashed history rewrite â€” so instead diff the full tree at
             # HEAD against git's empty tree, which lists every file as
             # "added" and forces a full scan.
             RANGE="$(git hash-object -t tree /dev/null) ${{ github.sha }}"
@@ -72,7 +72,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only --diff-filter=ACM $RANGE -- uploads/)
           if [ -n "$CHANGED" ]; then
-            echo "::error::Files were committed under uploads/ — this path is git-ignored for a reason (local-disk fallback storage, never source-controlled). See docs/INFRASTRUCTURE_SETUP.md."
+            echo "::error::Files were committed under uploads/ â€” this path is git-ignored for a reason (local-disk fallback storage, never source-controlled). See docs/INFRASTRUCTURE_SETUP.md."
             echo "$CHANGED"
             exit 1
           fi
@@ -83,6 +83,10 @@ jobs:
     needs: guard-dangerous-files
     env:
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/architect_hub"
+      # CI's Postgres service has no connection pooler in front of it, so
+      # DIRECT_URL is just the same connection -- schema.prisma requires
+      # both env vars to be set (see prisma/schema.prisma directUrl).
+      DIRECT_URL: "postgresql://postgres:postgres@localhost:5432/architect_hub"
       AUTH_SECRET: "ci-placeholder-secret-not-for-production-use-only"
       NEXTAUTH_URL: "http://localhost:3000"
       NEXT_PUBLIC_APP_URL: "http://localhost:3000"
@@ -129,3 +133,32 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # â”€â”€ Production migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # Disabled until DATABASE_URL_PRODUCTION and DIRECT_URL_PRODUCTION exist
+  # as repo secrets (see docs/DEPLOYMENT.md, step 5). Uncomment once set.
+  # Runs ahead of Railway's own auto-deploy picking up the same push to
+  # main, so the schema is already current by the time the new app code
+  # starts.
+  #
+  # IMPORTANT: `prisma migrate deploy` needs the DIRECT (non-pooled, port
+  # 5432) connection, not the pooled one the app uses at runtime -- see
+  # the directUrl comment in prisma/schema.prisma for why. Both secrets
+  # below should be Supabase connection strings, just different ports.
+  #
+  # migrate-production:
+  #   name: Apply migrations to production
+  #   runs-on: ubuntu-latest
+  #   needs: build
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 22
+  #         cache: "npm"
+  #     - run: npm ci
+  #     - run: npx prisma migrate deploy
+  #       env:
+  #         DATABASE_URL: ${{ secrets.DIRECT_URL_PRODUCTION }}
+  #         DIRECT_URL: ${{ secrets.DIRECT_URL_PRODUCTION }}

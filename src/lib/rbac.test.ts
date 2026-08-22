@@ -4,14 +4,21 @@ import {
   canAccessProject,
   canCreateProjects,
   canManageClients,
+  canManageFirmSettings,
   canManageStaff,
   canReassignProjects,
   canRecordPayments,
+  canViewPayments,
   isAdmin,
+  isSeniorArchitect,
   projectAccessWhere,
+  relatedProjectAccessWhere,
 } from "./rbac";
 
-function makeSession(role: "ADMIN" | "ARCHITECT", userId = "user-1"): Session {
+function makeSession(
+  role: "ADMIN" | "SENIOR_ARCHITECT" | "ARCHITECT",
+  userId = "user-1"
+): Session {
   return {
     user: { id: userId, role, email: "test@archub.io", name: "Test User" },
     expires: "2099-01-01T00:00:00.000Z",
@@ -70,5 +77,44 @@ describe("rbac", () => {
     expect(
       canAccessProject(admin, { architectId: "someone-else", supervisorId: null })
     ).toBe(true);
+  });
+
+  // --- Senior Architect: firm-wide oversight, between ADMIN and ARCHITECT ---
+
+  it("grants senior architects project create/reassign and firm-wide visibility", () => {
+    const senior = makeSession("SENIOR_ARCHITECT");
+    expect(isSeniorArchitect(senior)).toBe(true);
+    expect(isAdmin(senior)).toBe(false);
+    expect(canCreateProjects(senior)).toBe(true);
+    expect(canReassignProjects(senior)).toBe(true);
+    expect(projectAccessWhere(senior)).toEqual({});
+    expect(relatedProjectAccessWhere(senior)).toBeUndefined();
+    expect(
+      canAccessProject(senior, { architectId: "someone-else", supervisorId: null })
+    ).toBe(true);
+  });
+
+  it("denies senior architects admin-only capabilities (staff, clients, firm settings, payments)", () => {
+    const senior = makeSession("SENIOR_ARCHITECT");
+    expect(canManageStaff(senior)).toBe(false);
+    expect(canManageClients(senior)).toBe(false);
+    expect(canManageFirmSettings(senior)).toBe(false);
+    expect(canRecordPayments(senior)).toBe(false);
+  });
+
+  it("lets both architects and senior architects view (but not record) payments", () => {
+    const architect = makeSession("ARCHITECT");
+    const senior = makeSession("SENIOR_ARCHITECT");
+    expect(canViewPayments(architect)).toBe(true);
+    expect(canViewPayments(senior)).toBe(true);
+    expect(canRecordPayments(architect)).toBe(false);
+    expect(canRecordPayments(senior)).toBe(false);
+  });
+
+  it("still scopes a plain architect's related-project queries to their own assignments", () => {
+    const architect = makeSession("ARCHITECT", "arch-42");
+    expect(relatedProjectAccessWhere(architect)).toEqual({
+      OR: [{ architectId: "arch-42" }, { supervisorId: "arch-42" }],
+    });
   });
 });
