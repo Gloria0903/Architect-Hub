@@ -14,7 +14,7 @@ import { isFilePickerCooldownActive } from "@/lib/file-picker-guard";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-export type Role = "ADMIN" | "ARCHITECT";
+export type Role = "ADMIN" | "SENIOR_ARCHITECT" | "ARCHITECT";
 
 export type ProjectStatus =
   | "ON_TRACK"
@@ -59,6 +59,7 @@ export interface StaffMember {
   joinDate: string;
   isActive?: boolean;
   mustResetPassword?: boolean;
+  mfaEnabled?: boolean;
 
   _count?: {
     assignedProjects: number;
@@ -289,6 +290,7 @@ export function statusLabel(s: ProjectStatus) {
 export function roleLabel(r: Role) {
   return {
     ADMIN: "Admin",
+    SENIOR_ARCHITECT: "Senior Architect",
     ARCHITECT: "Architect",
   }[r];
 }

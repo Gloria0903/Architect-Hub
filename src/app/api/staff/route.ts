@@ -37,7 +37,7 @@ const Schema = z.object({
     .max(255, "Email address is too long")
     .transform((value) => value.toLowerCase()),
 
-  role: z.enum(["ADMIN", "ARCHITECT"]),
+  role: z.enum(["ADMIN", "SENIOR_ARCHITECT", "ARCHITECT"]),
 
   phone: z
     .string()
@@ -127,6 +127,7 @@ export async function GET() {
               lastLoginAt: true,
               isActive: true,
               mustResetPassword: true,
+              mfaEnabled: true,
 
               _count: {
                 select: {

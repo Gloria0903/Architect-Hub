@@ -11,6 +11,7 @@ import { Avatar } from "@/components/ui/avatar";
 
 const roleColors: Record<Role, string> = {
   ADMIN: "bg-blueprint-bg text-blueprint",
+  SENIOR_ARCHITECT: "bg-moss-bg text-moss",
   ARCHITECT: "bg-ochre-bg text-ochre",
 };
 
@@ -148,13 +149,14 @@ export default function StaffPage() {
               <Field label="Role" required>
                 <Select required value={form.role} onChange={e => setForm(f=>({...f,role:e.target.value as Role}))}>
                   <option value="ARCHITECT">Architect</option>
+                  <option value="SENIOR_ARCHITECT">Senior Architect</option>
                   <option value="ADMIN">Admin</option>
                 </Select>
               </Field>
               <Field label="Department"><Input value={form.department} onChange={e => setForm(f=>({...f,department:e.target.value}))} placeholder="e.g. Design" /></Field>
             </FormRow>
             <Field label="Initial password (optional)"><Input type="text" value={form.password} onChange={e => setForm(f=>({...f,password:e.target.value}))} placeholder="Leave blank to auto-generate a secure temp password" /></Field>
-            <p className="text-[11px] text-muted -mt-2">They must reset this on first login. If left blank, a secure temporary password is generated and shown once after creation — share it with them securely.</p>
+            <p className="text-[11px] text-muted -mt-2">They must reset this on first login. If left blank, a secure temporary password is generated and shown once after creation â€” share it with them securely.</p>
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => { setCreateOpen(false); resetForm(); }} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Add member</button>
@@ -174,6 +176,7 @@ export default function StaffPage() {
               <Field label="Role">
                 <Select value={form.role} onChange={e => setForm(f=>({...f,role:e.target.value as Role}))}>
                   <option value="ARCHITECT">Architect</option>
+                  <option value="SENIOR_ARCHITECT">Senior Architect</option>
                   <option value="ADMIN">Admin</option>
                 </Select>
               </Field>
@@ -192,7 +195,7 @@ export default function StaffPage() {
         <Modal open={!!tempPasswordNotice} onClose={() => setTempPasswordNotice(null)} title="Temporary password generated">
           <div className="flex flex-col gap-3">
             <p className="text-muted text-[12.5px]">
-              A temporary password was generated for <span className="text-ink font-medium">{tempPasswordNotice?.name}</span>. It will only be shown once here — copy it and share it securely. They will be required to change it on first login.
+              A temporary password was generated for <span className="text-ink font-medium">{tempPasswordNotice?.name}</span>. It will only be shown once here â€” copy it and share it securely. They will be required to change it on first login.
             </p>
             <div className="bg-vellum border border-line rounded-md px-3 py-2.5 font-mono text-[14px] text-ink select-all">
               {tempPasswordNotice?.password}

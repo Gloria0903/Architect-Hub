@@ -63,6 +63,16 @@ export function isArchitect(session: Session): boolean {
   return session.user.role === "ARCHITECT";
 }
 
+/**
+ * Returns true for senior architects â€” firm-wide oversight role that sits
+ * between ADMIN and ARCHITECT. Can create/reassign projects and see every
+ * project firm-wide, but not manage staff, clients, firm settings, or
+ * record payments (ADMIN-only).
+ */
+export function isSeniorArchitect(session: Session): boolean {
+  return session.user.role === "SENIOR_ARCHITECT";
+}
+
 /*
 |--------------------------------------------------------------------------
 | Staff management
@@ -106,21 +116,21 @@ export function canManageFirmSettings(
 */
 
 /**
- * Only administrators can create projects.
+ * Administrators and senior architects can create projects.
  */
 export function canCreateProjects(
   session: Session
 ): boolean {
-  return isAdmin(session);
+  return isAdmin(session) || isSeniorArchitect(session);
 }
 
 /**
- * Only administrators can reassign projects.
+ * Administrators and senior architects can reassign projects.
  */
 export function canReassignProjects(
   session: Session
 ): boolean {
-  return isAdmin(session);
+  return isAdmin(session) || isSeniorArchitect(session);
 }
 
 /*
@@ -157,6 +167,7 @@ export function canViewPayments(
 ): boolean {
   return (
     isAdmin(session) ||
+    isSeniorArchitect(session) ||
     isArchitect(session)
   );
 }
@@ -171,8 +182,8 @@ export function canViewPayments(
  * Prisma WHERE clause limiting projects to what the current user
  * is allowed to see.
  *
- * ADMIN:
- *   No restriction.
+ * ADMIN / SENIOR_ARCHITECT:
+ *   No restriction â€” firm-wide visibility.
  *
  * ARCHITECT:
  *   Only projects where they are architect OR supervisor.
@@ -180,7 +191,7 @@ export function canViewPayments(
 export function projectAccessWhere(
   session: Session
 ): Prisma.ProjectWhereInput {
-  if (isAdmin(session)) {
+  if (isAdmin(session) || isSeniorArchitect(session)) {
     return {};
   }
 
@@ -199,7 +210,7 @@ export function projectAccessWhere(
 /**
  * Checks whether the current user can access a specific project.
  *
- * ADMIN:
+ * ADMIN / SENIOR_ARCHITECT:
  *   Always true.
  *
  * ARCHITECT:
@@ -212,7 +223,7 @@ export function canAccessProject(
     supervisorId?: string | null;
   }
 ): boolean {
-  if (isAdmin(session)) {
+  if (isAdmin(session) || isSeniorArchitect(session)) {
     return true;
   }
 
@@ -239,8 +250,8 @@ export function canAccessProject(
  *   DailyLog
  *   ClientComment
  *
- * ADMIN:
- *   undefined → unrestricted.
+ * ADMIN / SENIOR_ARCHITECT:
+ *   undefined â†’ unrestricted.
  *
  * ARCHITECT:
  *   only resources whose project is assigned to them.
@@ -257,7 +268,7 @@ export function canAccessProject(
 export function relatedProjectAccessWhere(
   session: Session
 ): Prisma.ProjectWhereInput | undefined {
-  if (isAdmin(session)) {
+  if (isAdmin(session) || isSeniorArchitect(session)) {
     return undefined;
   }
 

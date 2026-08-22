@@ -18,7 +18,9 @@ export default function ProjectsPage() {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
-  const canCreate = isAdmin;
+  const isSeniorArchitect = role === "SENIOR_ARCHITECT";
+  const hasFirmWideView = isAdmin || isSeniorArchitect;
+  const canCreate = hasFirmWideView;
 
   const [filter, setFilter] = useState<Filter>("all");
   const [createOpen, setCreateOpen] = useState(false);
@@ -81,7 +83,7 @@ export default function ProjectsPage() {
         <div className="flex items-center justify-between mb-5">
           <div>
             <h1 className="font-display font-bold text-[20px] text-ink">Projects</h1>
-            <p className="text-muted text-[12px] mt-0.5">{projects.length} {isAdmin ? "projects" : "projects assigned to you"} — click a project to view full details</p>
+            <p className="text-muted text-[12px] mt-0.5">{projects.length} {hasFirmWideView ? "projects" : "projects assigned to you"} â€” click a project to view full details</p>
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && (
@@ -125,7 +127,7 @@ export default function ProjectsPage() {
               {visible.map(p => {
                 const arch = staff.find(s => s.id === p.architectId);
                 const client = clients.find(c => c.id === p.clientId);
-                const canManageThis = isAdmin;
+                const canManageThis = hasFirmWideView;
                 return (
                   <tr key={p.id} className="border-t border-line hover:bg-vellum/40 transition-colors">
                     <td className="px-4 py-3 font-mono text-[11px] text-muted">{p.sheetNo}</td>
@@ -133,7 +135,7 @@ export default function ProjectsPage() {
                       <div className="text-ink font-medium">{p.name}</div>
                       <div className="text-muted text-[11px]">{p.location}</div>
                     </td>
-                    <td className="px-4 py-3 text-muted">{client?.name ?? "—"}</td>
+                    <td className="px-4 py-3 text-muted">{client?.name ?? "â€”"}</td>
                     <td className="px-4 py-3">
                       {arch
                         ? <div className="flex items-center gap-1.5"><Avatar avatarUrl={arch.avatarUrl} initials={arch.initials} name={arch.name} size={20} fontSize={9} /><span className="text-ink">{arch.name}</span></div>
@@ -181,7 +183,7 @@ export default function ProjectsPage() {
               </Field>
             </FormRow>
             <Field label="Location" required><Input required value={form.location} onChange={e => setForm(f=>({...f,location:e.target.value}))} placeholder="e.g. Karen, Nairobi" /></Field>
-            <Field label="Description"><Textarea rows={2} value={form.description} onChange={e => setForm(f=>({...f,description:e.target.value}))} placeholder="Brief project description…" /></Field>
+            <Field label="Description"><Textarea rows={2} value={form.description} onChange={e => setForm(f=>({...f,description:e.target.value}))} placeholder="Brief project descriptionâ€¦" /></Field>
             <FormRow>
               <Field label="Assign architect">
                 <Select value={form.architectId} onChange={e => setForm(f=>({...f,architectId:e.target.value}))}>
@@ -225,7 +227,7 @@ export default function ProjectsPage() {
               <div className="flex flex-col gap-3.5">
                 <div className="bg-vellum rounded-md p-3 text-[12.5px]">
                   <div className="text-muted">Project</div>
-                  <div className="text-ink font-medium mt-0.5">{p.sheetNo} — {p.name}</div>
+                  <div className="text-ink font-medium mt-0.5">{p.sheetNo} â€” {p.name}</div>
                   <div className="text-muted mt-2">Currently assigned to</div>
                   <div className="text-ink font-medium mt-0.5">{current ? current.name : <span className="text-brick">Unassigned</span>}</div>
                 </div>
@@ -236,7 +238,7 @@ export default function ProjectsPage() {
                   </Select>
                 </Field>
                 <Field label="Reason for reassignment">
-                  <Textarea rows={2} value={reassignReason} onChange={e => setReassignReason(e.target.value)} placeholder="e.g. Architect on leave, workload rebalancing…" />
+                  <Textarea rows={2} value={reassignReason} onChange={e => setReassignReason(e.target.value)} placeholder="e.g. Architect on leave, workload rebalancingâ€¦" />
                 </Field>
                 <div className="flex justify-end gap-2 pt-1 border-t border-line">
                   <button onClick={() => setReassignTarget(null)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
@@ -252,5 +254,7 @@ export default function ProjectsPage() {
 }
 
 function roleShort(r: string) {
-  return r === "ADMIN" ? "Admin" : "Architect";
+  if (r === "ADMIN") return "Admin";
+  if (r === "SENIOR_ARCHITECT") return "Senior Architect";
+  return "Architect";
 }

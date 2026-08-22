@@ -277,6 +277,7 @@ model FirmSettings {
   country   String   @default("Kenya")
   currency  String   @default("KES")
   timezone  String   @default("Africa/Nairobi")
+  requireMfa Boolean @default(false)
   updatedAt DateTime @updatedAt
 }
 
@@ -414,6 +415,7 @@ model ProgressSnapshot {
 
 enum Role {
   ADMIN
+  SENIOR_ARCHITECT
   ARCHITECT
 }
 

@@ -1,7 +1,13 @@
+-- Org structure: add the "Senior Architect" role called for in the Phase 1
+-- proposal (creates/reassigns projects, firm-wide oversight) â€” distinct
+-- from ADMIN (full access) and ARCHITECT (assigned-projects only).
+ALTER TYPE "Role" ADD VALUE 'SENIOR_ARCHITECT';
+
 -- Firm profile: replace hardcoded settings-page values with real, editable columns
 ALTER TABLE "FirmSettings" ADD COLUMN "country"  TEXT NOT NULL DEFAULT 'Kenya';
 ALTER TABLE "FirmSettings" ADD COLUMN "currency" TEXT NOT NULL DEFAULT 'KES';
 ALTER TABLE "FirmSettings" ADD COLUMN "timezone" TEXT NOT NULL DEFAULT 'Africa/Nairobi';
+ALTER TABLE "FirmSettings" ADD COLUMN "requireMfa" BOOLEAN NOT NULL DEFAULT false;
 
 -- Per-user notification preferences (replaces the non-functional settings toggles)
 ALTER TABLE "User" ADD COLUMN "notifyLogReminder"   BOOLEAN NOT NULL DEFAULT true;

@@ -10,6 +10,7 @@ const DEFAULTS = {
   country: "Kenya",
   currency: "KES",
   timezone: "Africa/Nairobi",
+  requireMfa: false,
 };
 
 const Schema = z.object({
@@ -17,6 +18,7 @@ const Schema = z.object({
   country: z.string().trim().min(1, "Country can't be empty").max(80),
   currency: z.string().trim().min(1, "Currency can't be empty").max(10),
   timezone: z.string().trim().min(1, "Timezone can't be empty").max(80),
+  requireMfa: z.boolean().optional(),
 });
 
 /**
@@ -33,6 +35,7 @@ export async function GET() {
     country: settings?.country ?? DEFAULTS.country,
     currency: settings?.currency ?? DEFAULTS.currency,
     timezone: settings?.timezone ?? DEFAULTS.timezone,
+    requireMfa: settings?.requireMfa ?? DEFAULTS.requireMfa,
   });
 }
 
@@ -49,10 +52,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
+  const { firmName, country, currency, timezone, requireMfa } = parsed.data;
+
   const settings = await prisma.firmSettings.upsert({
     where: { id: SINGLETON_ID },
-    create: { id: SINGLETON_ID, ...parsed.data },
-    update: { ...parsed.data },
+    create: { id: SINGLETON_ID, firmName, country, currency, timezone, ...(requireMfa !== undefined && { requireMfa }) },
+    update: { firmName, country, currency, timezone, ...(requireMfa !== undefined && { requireMfa }) },
   });
 
   return NextResponse.json({
@@ -60,5 +65,6 @@ export async function PATCH(req: NextRequest) {
     country: settings.country,
     currency: settings.currency,
     timezone: settings.timezone,
+    requireMfa: settings.requireMfa,
   });
 }

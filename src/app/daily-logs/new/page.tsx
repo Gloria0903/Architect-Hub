@@ -1,3 +1,5 @@
+﻿//daily-log/e/page.tsx
+
 "use client";
 
 import { useState } from "react";

@@ -8,6 +8,7 @@ import { useStore, roleLabel, Role } from "@/store/app-store";
 import { CheckCircle, Camera, Trash2 } from "lucide-react";
 import { MfaSettingsCard } from "@/components/settings/mfa-card";
 import { FirmSettingsCard } from "@/components/settings/firm-settings-card";
+import { SecurityAccessCard } from "@/components/settings/security-access-card";
 import { Avatar } from "@/components/ui/avatar";
 import { notifyFilePickerOpening } from "@/lib/file-picker-guard";
 
@@ -214,6 +215,8 @@ export default function SettingsPage() {
           <MfaSettingsCard />
 
           {isAdmin && <FirmSettingsCard />}
+
+          {isAdmin && <SecurityAccessCard />}
 
           <Card className="p-4">
             <div className="font-medium text-ink text-[13px] mb-3">Notifications</div>
