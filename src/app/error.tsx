@@ -6,12 +6,12 @@ import { AlertTriangle, RotateCw } from "lucide-react";
 /**
  * Catches unhandled errors thrown during render (or in a Server Component
  * that streams down to this segment) anywhere under the app. Before this
- * existed, one bad render â€” a null pointer, an unexpected API response
- * shape, whatever â€” took the entire page down to Next's raw, unstyled
+ * existed, one bad render — a null pointer, an unexpected API response
+ * shape, whatever — took the entire page down to Next's raw, unstyled
  * default error screen. This gives people a branded, calm fallback with
  * a real way back in, instead of a dead end.
  *
- * Deliberately does NOT show error.message to the user â€” that can leak
+ * Deliberately does NOT show error.message to the user — that can leak
  * internal details (stack fragments, query info). It's logged to the
  * console for now; wire this into Sentry (or similar) once that's set up
  * so these are visible without someone having to report them manually.
@@ -39,7 +39,7 @@ export default function Error({
         </h1>
 
         <p className="mt-1.5 text-[12.5px] text-muted">
-          That's on us, not you. Your work up to this point is safe â€” try
+          That's on us, not you. Your work up to this point is safe — try
           again, and if it keeps happening, let your admin know.
         </p>
 

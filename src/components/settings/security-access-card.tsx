@@ -13,17 +13,17 @@ import { ShieldCheck, ShieldAlert, CheckCircle } from "lucide-react";
  * threading it through the JWT), which is a bigger, riskier change to the
  * auth flow than this pass should take on. Turning it on here labels the
  * expectation and shows exactly who's out of compliance so an admin can
- * follow up directly â€” actual login-time enforcement is a good follow-up
+ * follow up directly — actual login-time enforcement is a good follow-up
  * once this is proven out.
  *
  * Password policy is deliberately NOT exposed as a configurable toggle
- * here â€” it's already a strong fixed default (10+ chars, mixed case,
+ * here — it's already a strong fixed default (10+ chars, mixed case,
  * number, symbol; see src/lib/password-policy.ts) enforced server-side
  * everywhere a password is set. Making it admin-adjustable only adds a way
  * to accidentally weaken it.
  *
  * Active-session view/revoke is not implemented: this app uses JWT
- * sessions (no server-side session table â€” see src/lib/auth.ts), so
+ * sessions (no server-side session table — see src/lib/auth.ts), so
  * there's nothing to list or revoke without first moving to database
  * sessions, which is a real architectural change, not a settings toggle.
  */
@@ -73,7 +73,7 @@ export function SecurityAccessCard() {
       <p className="text-muted text-[11.5px] mb-3">Firm-wide security policy for all staff accounts.</p>
 
       {loading ? (
-        <p className="text-muted text-[12px]">Loadingâ€¦</p>
+        <p className="text-muted text-[12px]">Loading…</p>
       ) : (
         <>
           <div className="flex items-center justify-between py-1">

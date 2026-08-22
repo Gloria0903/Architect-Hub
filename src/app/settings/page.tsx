@@ -44,7 +44,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
-  // Firm profile â€” real data (was hardcoded "Architect Hub Demo Firm" etc.)
+  // Firm profile — real data (was hardcoded "Architect Hub Demo Firm" etc.)
   const [firm, setFirm] = useState<FirmProfile | null>(null);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function SettingsPage() {
       .catch(() => setFirm(null));
   }, []);
 
-  // Notification preferences â€” real, persisted per user (were non-functional placeholders)
+  // Notification preferences — real, persisted per user (were non-functional placeholders)
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
   const [prefsSaving, setPrefsSaving] = useState<string | null>(null);
 
@@ -86,7 +86,7 @@ export default function SettingsPage() {
   }, [prefs]);
 
   function openFilePicker() {
-    // See src/lib/file-picker-guard.ts â€” prevents AppProvider's window-focus
+    // See src/lib/file-picker-guard.ts — prevents AppProvider's window-focus
     // refresh from wiping the selected file when the OS dialog closes.
     notifyFilePickerOpening();
     fileInputRef.current?.click();
@@ -154,9 +154,9 @@ export default function SettingsPage() {
                   <div><div className="text-muted mb-1">Timezone</div><div className="text-ink">{firm.timezone}</div></div>
                 </div>
               ) : (
-                <p className="text-muted text-[12px]">Loadingâ€¦</p>
+                <p className="text-muted text-[12px]">Loading…</p>
               )}
-              <p className="text-muted text-[11px] mt-3">Only an admin can change these â€” see your firm admin to update them.</p>
+              <p className="text-muted text-[11px] mt-3">Only an admin can change these — see your firm admin to update them.</p>
             </Card>
           )}
 
@@ -183,7 +183,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex-1">
                 <div className="text-ink font-medium">{session?.user?.name}</div>
-                <div className="text-muted text-[12px]">{session?.user?.email} Â· {session?.user?.role ? roleLabel(session.user.role as Role) : ""}</div>
+                <div className="text-muted text-[12px]">{session?.user?.email} · {session?.user?.role ? roleLabel(session.user.role as Role) : ""}</div>
                 {me?.avatarUrl && (
                   <button
                     type="button"
@@ -239,7 +239,7 @@ export default function SettingsPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted text-[12px]">Loadingâ€¦</p>
+              <p className="text-muted text-[12px]">Loading…</p>
             )}
             <p className="text-muted text-[11px] mt-3">These control which emails and in-app notifications you receive. Changes save immediately.</p>
           </Card>

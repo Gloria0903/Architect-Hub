@@ -1,5 +1,3 @@
-//daily-log/page.tsx
-
 "use client";
 import { useState } from "react";
 import Link from "next/link";
@@ -15,13 +13,19 @@ const { logs, projects, staff } = useStore();
 const { data: session } = useSession();
 
 const isAdmin = session?.user?.role === "ADMIN";
+const isSeniorArchitect = session?.user?.role === "SENIOR_ARCHITECT";
+// Firm-wide viewers see who's missing today's log; matches the dashboard.
+const hasFirmWideView = isAdmin || isSeniorArchitect;
 
 const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterProject, setFilterProject] = useState("all");
   const [filterAuthor, setFilterAuthor] = useState("all");
 
   const today = new Date().toISOString().split("T")[0];
-  const architects = staff.filter(s => s.role !== "ADMIN");
+  // Daily logs are hands-on site reporting -- only ARCHITECT does that.
+  // ADMIN and SENIOR_ARCHITECT are oversight roles, not expected to submit
+  // one themselves (matches the same fix on the dashboard page).
+  const architects = staff.filter(s => s.role === "ARCHITECT");
   const submittedToday = logs.filter(l => l.date === today).map(l => l.authorId);
   const missingToday = architects.filter(a => !submittedToday.includes(a.id));
 
@@ -29,6 +33,8 @@ const [expandedId, setExpandedId] = useState<string | null>(null);
     .filter(l => filterProject === "all" || l.projectId === filterProject)
     .filter(l => filterAuthor === "all" || l.authorId === filterAuthor)
     .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+
+  const hasActiveFilters = filterProject !== "all" || filterAuthor !== "all";
 
   return (
     <AppShell>
@@ -44,7 +50,7 @@ const [expandedId, setExpandedId] = useState<string | null>(null);
         </div>
 
         {/* Missing logs alert */}
-        {isAdmin && missingToday.length > 0 && (
+        {hasFirmWideView && missingToday.length > 0 && (
   <div className="bg-brick-bg border border-brick/20 rounded-card p-3.5 mb-4 flex items-start gap-2.5">
     <AlertTriangle
       size={16}
@@ -71,7 +77,7 @@ const [expandedId, setExpandedId] = useState<string | null>(null);
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <select value={filterProject} onChange={e => setFilterProject(e.target.value)} className="border border-line rounded-md px-2.5 py-1.5 text-[12px] bg-surface outline-none">
             <option value="all">All projects</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.sheetNo} â€” {p.name}</option>)}
+            {projects.map(p => <option key={p.id} value={p.id}>{p.sheetNo} — {p.name}</option>)}
           </select>
           <select value={filterAuthor} onChange={e => setFilterAuthor(e.target.value)} className="border border-line rounded-md px-2.5 py-1.5 text-[12px] bg-surface outline-none">
             <option value="all">All staff</option>
@@ -81,7 +87,37 @@ const [expandedId, setExpandedId] = useState<string | null>(null);
         </div>
 
         <div className="flex flex-col gap-2.5">
-          {visible.length === 0 && <Card className="p-8 text-center text-muted text-[12.5px]">No logs match the selected filters.</Card>}
+          {visible.length === 0 && (
+            <Card className="p-8 text-center text-muted text-[12.5px]">
+              {logs.length === 0 ? (
+                <>
+                  No daily logs submitted yet.
+                  {!isAdmin && !isSeniorArchitect && (
+                    <>
+                      {" "}
+                      <Link href="/daily-logs/new" className="text-blueprint underline underline-offset-2">
+                        Submit today&apos;s log
+                      </Link>{" "}
+                      to get started.
+                    </>
+                  )}
+                </>
+              ) : hasActiveFilters ? (
+                <>
+                  No logs match the selected filters.{" "}
+                  <button
+                    type="button"
+                    onClick={() => { setFilterProject("all"); setFilterAuthor("all"); }}
+                    className="text-blueprint underline underline-offset-2"
+                  >
+                    Clear filters
+                  </button>
+                </>
+              ) : (
+                "No logs match the selected filters."
+              )}
+            </Card>
+          )}
           {visible.map(log => {
             const author = staff.find(s => s.id === log.authorId);
             const project = projects.find(p => p.id === log.projectId);
@@ -103,7 +139,7 @@ const [expandedId, setExpandedId] = useState<string | null>(null);
                         )}
                       </div>
                       <div className="text-muted text-[11.5px] mt-0.5">
-                        <span className="font-mono">{project?.sheetNo}</span> â€” {project?.name}
+                        <span className="font-mono">{project?.sheetNo}</span> — {project?.name}
                       </div>
                     </div>
                   </div>

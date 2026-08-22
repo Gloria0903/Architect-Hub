@@ -64,7 +64,7 @@ export function isArchitect(session: Session): boolean {
 }
 
 /**
- * Returns true for senior architects â€” firm-wide oversight role that sits
+ * Returns true for senior architects — firm-wide oversight role that sits
  * between ADMIN and ARCHITECT. Can create/reassign projects and see every
  * project firm-wide, but not manage staff, clients, firm settings, or
  * record payments (ADMIN-only).
@@ -183,7 +183,7 @@ export function canViewPayments(
  * is allowed to see.
  *
  * ADMIN / SENIOR_ARCHITECT:
- *   No restriction â€” firm-wide visibility.
+ *   No restriction — firm-wide visibility.
  *
  * ARCHITECT:
  *   Only projects where they are architect OR supervisor.
@@ -251,7 +251,7 @@ export function canAccessProject(
  *   ClientComment
  *
  * ADMIN / SENIOR_ARCHITECT:
- *   undefined â†’ unrestricted.
+ *   undefined → unrestricted.
  *
  * ARCHITECT:
  *   only resources whose project is assigned to them.

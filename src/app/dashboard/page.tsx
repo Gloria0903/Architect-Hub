@@ -327,7 +327,7 @@ const totalOutstanding = Math.max(
                   day: "numeric",
                 }
               )}{" "}
-              â€” {projects.length}{" "}
+              — {projects.length}{" "}
               {hasFirmWideView
                 ? `active projects across ${loggingStaffCount} staff`
                 : "projects assigned to you"}
@@ -352,7 +352,7 @@ const totalOutstanding = Math.max(
             </div>
 
             <div className="text-moss text-[11px] mt-1">
-              â†‘ {onTrack.length} on track
+              ↑ {onTrack.length} on track
             </div>
           </Card>
 
@@ -711,7 +711,7 @@ const totalOutstanding = Math.max(
                 href="/projects"
                 className="text-blueprint text-[11px] font-mono"
               >
-                Manage â†’
+                Manage →
               </Link>
             </div>
 
@@ -726,7 +726,7 @@ const totalOutstanding = Math.max(
                     href="/projects"
                     className="inline-block mt-2 text-blueprint text-[11px]"
                   >
-                    Create your first project â†’
+                    Create your first project →
                   </Link>
                 )}
               </div>
@@ -940,7 +940,7 @@ const totalOutstanding = Math.max(
                 href="/daily-logs"
                 className="text-blueprint text-[11px] font-mono"
               >
-                View all â†’
+                View all →
               </Link>
             </div>
 
@@ -986,7 +986,7 @@ const totalOutstanding = Math.max(
                       </span>
 
                       <span className="text-muted text-[11px]">
-                        â€”{" "}
+                        —{" "}
                         {project?.name ??
                           "Unknown project"}
                       </span>
@@ -1013,7 +1013,7 @@ const totalOutstanding = Math.max(
                 href="/client-comms"
                 className="text-blueprint text-[11px] font-mono"
               >
-                View all â†’
+                View all →
               </Link>
             </div>
 

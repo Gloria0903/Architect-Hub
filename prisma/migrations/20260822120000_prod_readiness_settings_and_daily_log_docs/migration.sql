@@ -1,5 +1,5 @@
 -- Org structure: add the "Senior Architect" role called for in the Phase 1
--- proposal (creates/reassigns projects, firm-wide oversight) â€” distinct
+-- proposal (creates/reassigns projects, firm-wide oversight) — distinct
 -- from ADMIN (full access) and ARCHITECT (assigned-projects only).
 ALTER TYPE "Role" ADD VALUE 'SENIOR_ARCHITECT';
 
@@ -15,7 +15,7 @@ ALTER TABLE "User" ADD COLUMN "notifyProjectDelay"  BOOLEAN NOT NULL DEFAULT tru
 ALTER TABLE "User" ADD COLUMN "notifyClientComment" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "User" ADD COLUMN "notifyWeeklySummary" BOOLEAN NOT NULL DEFAULT true;
 
--- Link documents to the daily log entry they were attached during (nullable â€”
+-- Link documents to the daily log entry they were attached during (nullable —
 -- documents uploaded outside the daily-log flow, e.g. contracts, are unaffected)
 ALTER TABLE "Document" ADD COLUMN "dailyLogId" TEXT;
 

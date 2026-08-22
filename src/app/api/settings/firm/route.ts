@@ -23,8 +23,8 @@ const Schema = z.object({
 
 /**
  * Firm profile is a single row (`FirmSettings.id === "singleton"`),
- * upserted lazily. GET is intentionally public (no auth check) â€” the
- * *unauthenticated* login page needs to render the firm name too â€” but
+ * upserted lazily. GET is intentionally public (no auth check) — the
+ * *unauthenticated* login page needs to render the firm name too — but
  * only an admin can change any of it (see the PATCH handler and rbac.ts).
  * Nothing in this record is sensitive.
  */

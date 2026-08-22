@@ -1,5 +1,3 @@
-﻿//daily-log/e/page.tsx
-
 "use client";
 
 import { useState } from "react";
@@ -32,7 +30,7 @@ export default function NewDailyLogPage() {
 
   // Two-phase flow: the log itself is submitted first (so it exists as a
   // real record with an id), THEN attachments are uploaded tied to that
-  // specific log entry via dailyLogId â€” rather than being only loosely
+  // specific log entry via dailyLogId — rather than being only loosely
   // associated with the project the whole time.
   const [createdLogId, setCreatedLogId] =
     useState<string | null>(null);
@@ -142,7 +140,7 @@ export default function NewDailyLogPage() {
             </h2>
 
             <p className="mt-1 text-[12.5px] text-muted">
-              Attach drawings, site photos, or other files to today&apos;s entry â€” optional.
+              Attach drawings, site photos, or other files to today&apos;s entry — optional.
             </p>
           </div>
 
@@ -185,7 +183,7 @@ export default function NewDailyLogPage() {
                 onClick={finish}
                 className="rounded-md bg-ink px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink/90"
               >
-                {attachedCount > 0 ? "Done" : "Skip â€” no attachments"}
+                {attachedCount > 0 ? "Done" : "Skip — no attachments"}
               </button>
             </div>
           </Card>
@@ -241,7 +239,7 @@ export default function NewDailyLogPage() {
                     key={project.id}
                     value={project.id}
                   >
-                    {project.sheetNo} â€”{" "}
+                    {project.sheetNo} —{" "}
                     {project.name}
                   </option>
                 ))}
@@ -271,7 +269,7 @@ export default function NewDailyLogPage() {
 
                   setError("");
                 }}
-                placeholder="Describe what was completed today in detailâ€¦"
+                placeholder="Describe what was completed today in detail…"
               />
 
               <div className="mt-1 flex items-center justify-between">
@@ -313,7 +311,7 @@ export default function NewDailyLogPage() {
                       e.target.value,
                   }))
                 }
-                placeholder="Any blockers, delays, or issues to flagâ€¦"
+                placeholder="Any blockers, delays, or issues to flag…"
               />
             </Field>
 
@@ -331,7 +329,7 @@ export default function NewDailyLogPage() {
                       e.target.value,
                   }))
                 }
-                placeholder="What remains outstandingâ€¦"
+                placeholder="What remains outstanding…"
               />
             </Field>
 
@@ -349,7 +347,7 @@ export default function NewDailyLogPage() {
                       e.target.value,
                   }))
                 }
-                placeholder="What happens next and by whenâ€¦"
+                placeholder="What happens next and by when…"
               />
             </Field>
 
@@ -414,8 +412,8 @@ export default function NewDailyLogPage() {
                 className="rounded-md bg-ink px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink/90 disabled:opacity-60"
               >
                 {submitting
-                  ? "Submittingâ€¦"
-                  : "Submit log â€” then attach files"}
+                  ? "Submitting…"
+                  : "Submit log — then attach files"}
               </button>
             </div>
           </form>

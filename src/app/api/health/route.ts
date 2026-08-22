@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 /**
  * Health check for load balancers / uptime monitors / container
  * orchestration. Checks the two hard external dependencies:
- *  - Postgres (via Prisma) â€” if this fails, nothing works, so we 503.
- *  - Redis â€” email queue + reminders. If it's down, the app still serves
+ *  - Postgres (via Prisma) — if this fails, nothing works, so we 503.
+ *  - Redis — email queue + reminders. If it's down, the app still serves
  *    traffic, so we report it as "degraded" rather than failing the whole
  *    check (don't want a Redis blip taking the app out of rotation).
  */

@@ -5,7 +5,7 @@ export type SessionUser = { id: string; role: "ADMIN" | "SENIOR_ARCHITECT" | "AR
 /**
  * A user can access a project's documents if they're an Admin, a Senior
  * Architect (firm-wide oversight), the assigned architect, or the
- * supervisor. Adjust here if Phase 2 adds team-based access â€” this is the
+ * supervisor. Adjust here if Phase 2 adds team-based access — this is the
  * single choke point, so callers never need to duplicate the rule.
  */
 export async function canAccessProject(user: SessionUser, projectId: string): Promise<boolean> {

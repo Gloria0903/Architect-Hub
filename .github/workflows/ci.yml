@@ -27,7 +27,7 @@ jobs:
             # New branch or force-pushed/rewritten history: there is no valid
             # 'before' commit to diff against. Silently skipping here is
             # exactly how a dangerous file previously slipped back in via a
-            # squashed history rewrite â€” so instead diff the full tree at
+            # squashed history rewrite — so instead diff the full tree at
             # HEAD against git's empty tree, which lists every file as
             # "added" and forces a full scan.
             RANGE="$(git hash-object -t tree /dev/null) ${{ github.sha }}"
@@ -72,7 +72,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only --diff-filter=ACM $RANGE -- uploads/)
           if [ -n "$CHANGED" ]; then
-            echo "::error::Files were committed under uploads/ â€” this path is git-ignored for a reason (local-disk fallback storage, never source-controlled). See docs/INFRASTRUCTURE_SETUP.md."
+            echo "::error::Files were committed under uploads/ — this path is git-ignored for a reason (local-disk fallback storage, never source-controlled). See docs/INFRASTRUCTURE_SETUP.md."
             echo "$CHANGED"
             exit 1
           fi
@@ -134,7 +134,7 @@ jobs:
       - name: Build
         run: npm run build
 
-  # â”€â”€ Production migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── Production migrations ────────────────────────────────────────────
   # Disabled until DATABASE_URL_PRODUCTION and DIRECT_URL_PRODUCTION exist
   # as repo secrets (see docs/DEPLOYMENT.md, step 5). Uncomment once set.
   # Runs ahead of Railway's own auto-deploy picking up the same push to

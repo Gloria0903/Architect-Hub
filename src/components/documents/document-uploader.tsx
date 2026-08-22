@@ -505,7 +505,7 @@ export function DocumentUploader({
       input.value = "";
 
       // Tell AppProvider's focus-refresh listener to stand down for a
-      // couple seconds â€” see src/lib/file-picker-guard.ts for why.
+      // couple seconds — see src/lib/file-picker-guard.ts for why.
       notifyFilePickerOpening();
 
       input.click();

@@ -14,7 +14,7 @@ import { notifyDocumentUploaded } from "@/lib/notifications";
 // config change can't silently move it to Edge and break uploads.
 export const runtime = "nodejs";
 // Large CAD/BIM files can take a while to stream through the server on a
-// slow connection â€” give this route more headroom than the default.
+// slow connection — give this route more headroom than the default.
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
     /*
      * If this upload is being attached to a specific daily log entry,
      * confirm that log belongs to this project and was authored by the
-     * uploader â€” otherwise silently ignore it rather than trusting an
+     * uploader — otherwise silently ignore it rather than trusting an
      * arbitrary ID from the client.
      */
     let resolvedDailyLogId: string | undefined;

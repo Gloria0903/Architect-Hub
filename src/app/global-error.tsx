@@ -4,9 +4,9 @@ import { useEffect } from "react";
 
 /**
  * The last line of defense. Only fires when an error breaks the ROOT
- * layout itself (not just a page under it â€” src/app/error.tsx handles
+ * layout itself (not just a page under it — src/app/error.tsx handles
  * that, more common case). Because this replaces the root layout, it
- * has to render its own <html>/<body> â€” the normal layout isn't
+ * has to render its own <html>/<body> — the normal layout isn't
  * available anymore at this point.
  *
  * Kept deliberately minimal and dependency-free: if things are broken
@@ -41,7 +41,7 @@ export default function GlobalError({
               Architect Hub couldn&apos;t load
             </h1>
             <p style={{ marginTop: "8px", fontSize: "13px", color: "#6B7280" }}>
-              Something went wrong at startup. Your data is safe â€” try
+              Something went wrong at startup. Your data is safe — try
               reloading, and contact your admin if this continues.
             </p>
             <button

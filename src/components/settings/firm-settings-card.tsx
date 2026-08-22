@@ -14,10 +14,10 @@ interface FirmProfile {
 const EMPTY: FirmProfile = { firmName: "", country: "", currency: "", timezone: "" };
 
 /**
- * Lets an admin edit the firm's real profile â€” name, country, currency,
- * timezone â€” across the whole app (login page, sidebar, settings) without
+ * Lets an admin edit the firm's real profile — name, country, currency,
+ * timezone — across the whole app (login page, sidebar, settings) without
  * touching env vars or redeploying. Backed by the FirmSettings singleton
- * row via /api/settings/firm â€” see that route for the admin-only PATCH
+ * row via /api/settings/firm — see that route for the admin-only PATCH
  * gate (also enforced server-side, not just by hiding this card from
  * non-admins).
  */
@@ -70,7 +70,7 @@ export function FirmSettingsCard() {
         This appears on the login screen, the sidebar, and everywhere dates/amounts are shown for everyone at the firm.
       </p>
       {loading ? (
-        <p className="text-muted text-[12px]">Loadingâ€¦</p>
+        <p className="text-muted text-[12px]">Loading…</p>
       ) : (
         <form onSubmit={handleSave} className="flex flex-col gap-3">
           <Field label="Firm name" required>
@@ -91,7 +91,7 @@ export function FirmSettingsCard() {
           <div className="flex items-center justify-end gap-3 pt-1 border-t border-line">
             {saved && <span className="flex items-center gap-1 text-moss text-[12px]"><CheckCircle size={13} />Saved</span>}
             <button type="submit" disabled={saving} className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium disabled:opacity-50">
-              {saving ? "Savingâ€¦" : "Save changes"}
+              {saving ? "Saving…" : "Save changes"}
             </button>
           </div>
         </form>

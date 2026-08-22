@@ -1,38 +1,38 @@
 # Deploying Architect Hub
 
-This app is two long-running processes sharing one codebase â€” the Next.js
+This app is two long-running processes sharing one codebase — the Next.js
 web app, and a background worker (email sending + reminder jobs, via
-BullMQ). The worker **cannot** run on a serverless platform like Vercel â€”
+BullMQ). The worker **cannot** run on a serverless platform like Vercel —
 it needs a persistent connection to Redis, not a request/response cycle.
 That's why this guide uses **Railway**, not Vercel: Railway runs both
 processes as ordinary long-lived containers, and it can build straight
 from the multi-stage `Dockerfile` already in this repo (`runner` target
-for the web app, `worker` target for the background jobs) â€” no new
+for the web app, `worker` target for the background jobs) — no new
 Docker config needed.
 
-Keep using your existing **Supabase** Postgres â€” no need to migrate
+Keep using your existing **Supabase** Postgres — no need to migrate
 databases. Add **Upstash** for Redis (see `docs/INFRASTRUCTURE_SETUP.md`
 for both).
 
 ## 1. Create the Railway project
 
-1. [railway.app](https://railway.app) â†’ New Project â†’ **Deploy from GitHub
-   repo** â†’ select `Gloria0903/Architect-Hub`.
+1. [railway.app](https://railway.app) → New Project → **Deploy from GitHub
+   repo** → select `Gloria0903/Architect-Hub`.
 2. Railway will create one service from the repo. Rename it **web**.
-3. Add a second service: **+ New â†’ GitHub Repo â†’ same repo again** â†’
+3. Add a second service: **+ New → GitHub Repo → same repo again** →
    rename it **worker**. (Two services, same repo, different build
-   target â€” see step 2.)
+   target — see step 2.)
 
 ## 2. Point each service at the right Docker build target
 
-For **each** service â†’ Settings â†’ Build:
+For **each** service → Settings → Build:
 - Builder: **Dockerfile**
 - Dockerfile Path: `Dockerfile` (default, already correct)
 - Docker Build Target:
-  - `web` service â†’ `runner`
-  - `worker` service â†’ `worker`
+  - `web` service → `runner`
+  - `worker` service → `worker`
 
-This matches the two named stages already in the Dockerfile â€” no image
+This matches the two named stages already in the Dockerfile — no image
 duplication, no new files.
 
 ## 3. Environment variables
@@ -71,20 +71,20 @@ NODE_ENV=production
 ```
 
 Railway supports **Shared Variables** at the project level so you don't
-have to paste `DATABASE_URL`/`REDIS_URL` twice â€” set them once there and
+have to paste `DATABASE_URL`/`REDIS_URL` twice — set them once there and
 reference them from both services.
 
 ## 4. Networking
 
-- **web**: Settings â†’ Networking â†’ Generate Domain (or attach your own
+- **web**: Settings → Networking → Generate Domain (or attach your own
   custom domain). This is the URL `NEXTAUTH_URL`/`NEXT_PUBLIC_APP_URL`
   must match exactly, including `https://`.
-- **worker**: no public networking needed at all â€” it doesn't listen on a
+- **worker**: no public networking needed at all — it doesn't listen on a
   port. Leave networking off for this service.
 
 ## 5. Database migrations
 
-The `runner`/`worker` Docker stages intentionally ship a minimal image â€”
+The `runner`/`worker` Docker stages intentionally ship a minimal image —
 they don't include the full `prisma` CLI, only the already-generated
 client (keeps the container small and the cold start fast). So
 migrations run as their own step, **not** inside the container's start
@@ -97,9 +97,9 @@ DATABASE_URL="<your production Supabase URL>" npx prisma migrate deploy
 ```
 
 **Every deploy after that:** add `DATABASE_URL_PRODUCTION` as a GitHub
-Actions secret (Settings â†’ Secrets and variables â†’ Actions), then enable
+Actions secret (Settings → Secrets and variables → Actions), then enable
 the commented-out `migrate-production` job in `.github/workflows/ci.yml`
-(see the comment there) â€” it runs `prisma migrate deploy` against
+(see the comment there) — it runs `prisma migrate deploy` against
 production automatically on every push to `main`, ahead of Railway's own
 auto-deploy picking up the same commit.
 
@@ -114,6 +114,6 @@ auto-deploy picking up the same commit.
 ## What this guide deliberately doesn't cover
 
 Sentry/error tracking, and anything requiring your actual Railway/AWS/
-Upstash account credentials â€” those need you in the loop; ask Claude to
+Upstash account credentials — those need you in the loop; ask Claude to
 wire in the code side once you've created the accounts and have keys to
 share.

@@ -9,7 +9,7 @@
  * also blurs the window, and closing it (after picking a file) also
  * re-focuses it. That fires the same "focus" listener, which kicks off a
  * refresh/re-render cycle that can unmount or reset the uploader before
- * React's onChange handler for the file input has run â€” so the selected
+ * React's onChange handler for the file input has run — so the selected
  * file is silently lost and the user has to try again with no error shown.
  *
  * FIX (v2 -- state-based, not time-based)
