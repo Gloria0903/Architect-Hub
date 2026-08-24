@@ -102,7 +102,19 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
    * violation, which is why this previously just silently failed.
    * Check first and give a clear, actionable answer instead.
    */
-  const [assignedProjects, supervisedProjects, dailyLogs, documents, payments, invoices] =
+  const [
+    assignedProjects,
+    supervisedProjects,
+    dailyLogs,
+    documents,
+    payments,
+    invoices,
+    assignmentRecords,
+    taskAssignments,
+    milestonesCreated,
+    snapshotsCreated,
+    archiveHistory,
+  ] =
     await Promise.all([
       prisma.project.count({ where: { architectId: id } }),
       prisma.project.count({ where: { supervisorId: id } }),
@@ -110,6 +122,23 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
       prisma.document.count({ where: { uploadedById: id } }),
       prisma.payment.count({ where: { recordedById: id } }),
       prisma.invoice.count({ where: { recordedById: id } }),
+      prisma.assignmentRecord.count({
+        where: {
+          OR: [
+            { fromArchitectId: id },
+            { toArchitectId: id },
+            { performedById: id },
+          ],
+        },
+      }),
+      prisma.projectTask.count({ where: { assigneeId: id } }),
+      prisma.projectMilestone.count({ where: { createdById: id } }),
+      prisma.progressSnapshot.count({ where: { createdById: id } }),
+      prisma.project.count({
+        where: {
+          OR: [{ archivedById: id }, { restoredById: id }],
+        },
+      }),
     ]);
 
   const hasHistory =
@@ -118,7 +147,12 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     dailyLogs > 0 ||
     documents > 0 ||
     payments > 0 ||
-    invoices > 0;
+    invoices > 0 ||
+    assignmentRecords > 0 ||
+    taskAssignments > 0 ||
+    milestonesCreated > 0 ||
+    snapshotsCreated > 0 ||
+    archiveHistory > 0;
 
   if (hasHistory) {
     return NextResponse.json(
@@ -134,6 +168,31 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(`Failed to delete staff member ${id}:`, error);
+
+    /*
+     * Safety net: the pre-check above enumerates the relations we know
+     * about, but this schema has enough User-referencing tables (audit
+     * trails, login history, etc.) that a manual list can miss one --
+     * it already has once. Any foreign-key violation (Prisma code
+     * P2003) at this point means the same underlying situation as the
+     * pre-check catches, just via a table we didn't explicitly count.
+     * Give the same clear, actionable answer either way instead of a
+     * generic failure message.
+     */
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "P2003"
+    ) {
+      return NextResponse.json(
+        {
+          error: `${existing.name} has existing records elsewhere in the system and can't be permanently deleted -- that history needs to stay intact. Deactivate their account instead to block their login while keeping the firm's records complete.`,
+        },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json({ error: "Failed to delete staff member" }, { status: 500 });
   }
 }

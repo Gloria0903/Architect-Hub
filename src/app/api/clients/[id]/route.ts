@@ -277,6 +277,29 @@ export async function DELETE(
       error
     );
 
+    /*
+     * Safety net matching the one added to staff deletion: the checks
+     * above enumerate the relations we know about (projects, comments),
+     * but a foreign-key violation on any other table this schema might
+     * reference from Client means the same underlying situation --
+     * existing records elsewhere depending on this client. Give the
+     * same clear answer rather than a generic failure.
+     */
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "P2003"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "This client has existing records elsewhere in the system and can't be deleted yet. Remove the related records first.",
+        },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
       {
         error:
