@@ -33,14 +33,25 @@ export default function FinancePage() {
     clients,
     payments,
     addPayment,
+    addInvoice,
   } = useStore();
 
   const [open, setOpen] = useState(false);
+
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
 
   const [selectedProject, setSelectedProject] =
     useState<string | null>(null);
 
   const [form, setForm] = useState({
+    projectId: "",
+    amount: "",
+    date: "",
+    reference: "",
+    note: "",
+  });
+
+  const [invoiceForm, setInvoiceForm] = useState({
     projectId: "",
     amount: "",
     date: "",
@@ -133,6 +144,19 @@ export default function FinancePage() {
     const paid = getPaid(project);
 
     return Math.max(invoiced - paid, 0);
+  }
+
+  /**
+   * Amount of the contract budget still available to invoice.
+   */
+  function getRemainingToInvoice(project: {
+    budget?: number | null;
+    invoiced?: number | null;
+  }) {
+    const budget = getContractValue(project);
+    const invoiced = getInvoiced(project);
+
+    return Math.max(budget - invoiced, 0);
   }
 
   /**
@@ -350,6 +374,92 @@ export default function FinancePage() {
 
   /*
    * --------------------------------------------------------------------------
+   * RECORD INVOICE
+   * --------------------------------------------------------------------------
+   */
+
+  async function handleInvoiceSubmit(
+    e: React.FormEvent<HTMLFormElement>
+  ) {
+    e.preventDefault();
+
+    const amount = Number(invoiceForm.amount);
+
+    if (
+      !invoiceForm.projectId ||
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      return;
+    }
+
+    const project = projects.find(
+      (item) => item.id === invoiceForm.projectId
+    );
+
+    if (!project) {
+      alert(
+        "The selected project could not be found."
+      );
+      return;
+    }
+
+    /*
+     * An invoice can never push the total invoiced amount past the
+     * project's contract budget.
+     */
+    const remaining = getRemainingToInvoice(project);
+
+    if (remaining <= 0) {
+      alert(
+        "This project's full contract value has already been invoiced."
+      );
+      return;
+    }
+
+    if (amount > remaining) {
+      alert(
+        `This invoice cannot exceed the remaining budget of ${formatKsh(
+          remaining
+        )}.`
+      );
+      return;
+    }
+
+    try {
+      await addInvoice({
+        projectId: invoiceForm.projectId,
+        amount,
+        date: invoiceForm.date,
+        reference: invoiceForm.reference.trim(),
+        note: invoiceForm.note.trim(),
+      });
+
+      setInvoiceOpen(false);
+
+      setInvoiceForm({
+        projectId: "",
+        amount: "",
+        date: "",
+        reference: "",
+        note: "",
+      });
+    } catch (error) {
+      console.error(
+        "Failed to record invoice:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to record invoice."
+      );
+    }
+  }
+
+  /*
+   * --------------------------------------------------------------------------
    * PAYMENT HISTORY
    * --------------------------------------------------------------------------
    */
@@ -387,6 +497,14 @@ export default function FinancePage() {
 
           <div className="flex items-center gap-2">
           <RefreshButton />
+          <button
+            type="button"
+            onClick={() => setInvoiceOpen(true)}
+            className="flex items-center gap-1.5 border border-line text-ink rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-vellum"
+          >
+            <Plus size={15} />
+            Record invoice
+          </button>
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -1090,6 +1208,269 @@ export default function FinancePage() {
                 className="px-4 py-2 rounded-md text-[12.5px] bg-moss text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Record payment
+              </button>
+            </div>
+          </form>
+        </Modal>
+
+        {/* RECORD INVOICE MODAL */}
+
+        <Modal
+          open={invoiceOpen}
+          onClose={() => setInvoiceOpen(false)}
+          title="Record invoice"
+          subtitle="Raises a bill against the project's remaining contract budget"
+        >
+          <form
+            onSubmit={handleInvoiceSubmit}
+            className="flex flex-col gap-3.5"
+          >
+            {/* PROJECT */}
+
+            <Field label="Project" required>
+              <Select
+                required
+                value={invoiceForm.projectId}
+                onChange={(e) =>
+                  setInvoiceForm((current) => ({
+                    ...current,
+                    projectId: e.target.value,
+                  }))
+                }
+              >
+                <option value="">
+                  Select project
+                </option>
+
+                {projects.map((project) => {
+                  const remaining =
+                    getRemainingToInvoice(project);
+
+                  const contract =
+                    getContractValue(project);
+
+                  const invoiced =
+                    getInvoiced(project);
+
+                  return (
+                    <option
+                      key={project.id}
+                      value={project.id}
+                      disabled={remaining <= 0}
+                    >
+                      {project.sheetNo} —{" "}
+                      {project.name}{" "}
+                      (Remaining to invoice:{" "}
+                      {formatKsh(remaining)}{" "}
+                      / Contract:{" "}
+                      {formatKsh(contract)}{" "}
+                      / Already invoiced:{" "}
+                      {formatKsh(invoiced)})
+                    </option>
+                  );
+                })}
+              </Select>
+            </Field>
+
+            {/* AMOUNT + DATE */}
+
+            <FormRow>
+              <Field
+                label="Amount (KSh)"
+                required
+              >
+                <Input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  required
+                  value={invoiceForm.amount}
+                  onChange={(e) =>
+                    setInvoiceForm((current) => ({
+                      ...current,
+                      amount: e.target.value,
+                    }))
+                  }
+                  placeholder="e.g. 2500000"
+                />
+              </Field>
+
+              <Field
+                label="Invoice date"
+                required
+              >
+                <Input
+                  type="date"
+                  required
+                  value={invoiceForm.date}
+                  onChange={(e) =>
+                    setInvoiceForm((current) => ({
+                      ...current,
+                      date: e.target.value,
+                    }))
+                  }
+                />
+              </Field>
+            </FormRow>
+
+            {/* REFERENCE */}
+
+            <Field label="Invoice number">
+              <Input
+                value={invoiceForm.reference}
+                onChange={(e) =>
+                  setInvoiceForm((current) => ({
+                    ...current,
+                    reference: e.target.value,
+                  }))
+                }
+                placeholder="e.g. INV-A101-002"
+              />
+            </Field>
+
+            {/* NOTE */}
+
+            <Field label="Note">
+              <Textarea
+                rows={2}
+                value={invoiceForm.note}
+                onChange={(e) =>
+                  setInvoiceForm((current) => ({
+                    ...current,
+                    note: e.target.value,
+                  }))
+                }
+                placeholder="e.g. Second stage billing..."
+              />
+            </Field>
+
+            {/* INVOICE SUMMARY */}
+
+            {invoiceForm.projectId &&
+              (() => {
+                const project = projects.find(
+                  (item) =>
+                    item.id === invoiceForm.projectId
+                );
+
+                if (!project) {
+                  return null;
+                }
+
+                const contract =
+                  getContractValue(project);
+
+                const invoiced =
+                  getInvoiced(project);
+
+                const remaining =
+                  getRemainingToInvoice(project);
+
+                const amount = Number(
+                  invoiceForm.amount || 0
+                );
+
+                const remainingAfterInvoice =
+                  Math.max(remaining - amount, 0);
+
+                return (
+                  <div className="rounded-md border border-line bg-vellum/50 p-3 text-[11px]">
+                    <div className="font-medium text-ink mb-2">
+                      Invoice summary
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-y-1.5">
+                      <div className="text-muted">
+                        Contract value
+                      </div>
+
+                      <div className="text-right font-mono">
+                        {formatKsh(contract)}
+                      </div>
+
+                      <div className="text-muted">
+                        Already invoiced
+                      </div>
+
+                      <div className="text-right font-mono">
+                        {formatKsh(invoiced)}
+                      </div>
+
+                      <div className="text-muted">
+                        Remaining to invoice
+                      </div>
+
+                      <div className="text-right font-mono text-blueprint">
+                        {formatKsh(remaining)}
+                      </div>
+
+                      {amount > 0 && (
+                        <>
+                          <div className="text-muted border-t border-line pt-1.5 mt-1.5">
+                            This invoice
+                          </div>
+
+                          <div className="text-right font-mono text-blueprint border-t border-line pt-1.5 mt-1.5">
+                            {formatKsh(amount)}
+                          </div>
+
+                          <div className="text-muted">
+                            Remaining after this invoice
+                          </div>
+
+                          <div className="text-right font-mono font-medium">
+                            {formatKsh(remainingAfterInvoice)}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {amount > remaining && (
+                      <div className="mt-2 text-brick">
+                        Invoice exceeds the remaining contract budget.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+            {/* ACTIONS */}
+
+            <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
+              <button
+                type="button"
+                onClick={() => setInvoiceOpen(false)}
+                className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted hover:bg-vellum"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={(() => {
+                  if (!invoiceForm.projectId || !invoiceForm.amount) {
+                    return true;
+                  }
+
+                  const amount = Number(invoiceForm.amount);
+
+                  if (!Number.isFinite(amount) || amount <= 0) {
+                    return true;
+                  }
+
+                  const project = projects.find(
+                    (item) => item.id === invoiceForm.projectId
+                  );
+
+                  if (!project) {
+                    return true;
+                  }
+
+                  return amount > getRemainingToInvoice(project);
+                })()}
+                className="px-4 py-2 rounded-md text-[12.5px] bg-blueprint text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Record invoice
               </button>
             </div>
           </form>

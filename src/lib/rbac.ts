@@ -157,6 +157,17 @@ export function canRecordPayments(
 }
 
 /**
+ * Whether the user can record invoices (raise a bill against a
+ * project's budget). Same trust level as recording payments -- it's
+ * the other half of the same financial workflow.
+ */
+export function canRecordInvoices(
+  session: Session
+): boolean {
+  return isAdmin(session);
+}
+
+/**
  * Whether the user can view financial/payment information.
  *
  * Both ADMIN and ARCHITECT can read financial data, but architects

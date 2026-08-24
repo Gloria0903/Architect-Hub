@@ -6,6 +6,7 @@ import {
   canRecordPayments,
   canViewPayments,
   isAdmin,
+  relatedProjectAccessWhere,
 } from "@/lib/rbac";
 import { z } from "zod";
 
@@ -133,8 +134,10 @@ export async function GET(
    * satisfied.
    */
 
+  const relatedWhere = relatedProjectAccessWhere(session);
+
   const projectWhere =
-    isAdmin(session)
+    relatedWhere === undefined
       ? projectId
         ? {
             id: projectId,
@@ -142,18 +145,7 @@ export async function GET(
         : undefined
       : {
           AND: [
-            {
-              OR: [
-                {
-                  architectId:
-                    session.user.id,
-                },
-                {
-                  supervisorId:
-                    session.user.id,
-                },
-              ],
-            },
+            relatedWhere,
 
             ...(projectId
               ? [

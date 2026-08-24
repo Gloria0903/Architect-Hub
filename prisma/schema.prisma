@@ -54,6 +54,7 @@ model User {
   notifications       Notification[]
   passwordResetTokens PasswordResetToken[]
   payments            Payment[]
+  invoices            Invoice[]
   progressSnapshots   ProgressSnapshot[]      @relation("ProgressSnapshotCreator")
   assignedProjects    Project[]               @relation("ArchitectProjects")
   archivedProjects    Project[]               @relation("ArchivedProjects")
@@ -146,6 +147,7 @@ model Project {
   dailyLogs         DailyLog[]
   documents         Document[]
   payments          Payment[]
+  invoices          Invoice[]
   progressSnapshots ProgressSnapshot[]
   architect         User?                   @relation("ArchitectProjects", fields: [architectId], references: [id])
   archivedBy        User?                   @relation("ArchivedProjects", fields: [archivedById], references: [id])
@@ -252,6 +254,27 @@ model ClientComment {
 }
 
 model Payment {
+  id           String   @id @default(cuid())
+  amount       Float
+  date         DateTime
+  reference    String?
+  note         String?
+  createdAt    DateTime @default(now())
+  projectId    String
+  recordedById String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  recordedBy   User     @relation(fields: [recordedById], references: [id])
+
+  @@index([projectId])
+}
+
+// Mirrors Payment exactly -- an invoice is the same kind of financial
+// record (who raised it, how much, when, what reference number), just
+// increasing `invoiced` instead of `paid`. Payments were already capped
+// at "can't exceed invoiced" (see /api/payments), but nothing anywhere
+// ever actually increased `invoiced` in the first place -- this model
+// (and /api/invoices) is that missing step of Budget -> Invoice -> Payment.
+model Invoice {
   id           String   @id @default(cuid())
   amount       Float
   date         DateTime

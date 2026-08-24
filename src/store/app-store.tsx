@@ -578,6 +578,14 @@ interface AppActions {
     note?: string;
   }) => Promise<void>;
 
+  addInvoice: (p: {
+    projectId: string;
+    amount: number;
+    date: string;
+    reference?: string;
+    note?: string;
+  }) => Promise<void>;
+
   markNotificationRead: (
     id: string
   ) => Promise<void>;
@@ -1192,6 +1200,25 @@ export function AppProvider({
     [refresh]
   );
 
+  const addInvoice = useCallback(
+    async (
+      data: Parameters<
+        AppActions["addInvoice"]
+      >[0]
+    ) => {
+      await apiFetch(
+        "/api/invoices",
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      );
+
+      await refresh();
+    },
+    [refresh]
+  );
+
   // ─── Notifications ───────────────────────────────────────────────────────
 
   const markNotificationRead =
@@ -1610,6 +1637,7 @@ export function AppProvider({
         resolveComment,
 
         addPayment,
+        addInvoice,
 
         markNotificationRead,
 
