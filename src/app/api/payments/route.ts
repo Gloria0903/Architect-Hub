@@ -505,55 +505,29 @@ export async function POST(
    *
    * Therefore:
    *
-   *     Outstanding = Invoiced - Paid
+   *     Outstanding = Budget - Paid
+   *
+   * (Invoiced is tracked separately via /api/invoices for reference,
+   * but no longer constrains what payments are allowed.)
    */
 
   const contractValue =
     Number(project.budget ?? 0);
 
-  const totalInvoiced =
-    Number(project.invoiced ?? 0);
-
   const currentPaid =
     Number(project.paid ?? 0);
 
   /*
-   * Existing database consistency.
+   * Payments are capped directly against the contract budget --
+   * invoicing (see /api/invoices) is informational tracking only and
+   * no longer gates whether a payment can be recorded. A firm can
+   * record a client's payment the moment it's received, whether or
+   * not a formal invoice was raised for it first.
    */
-
-  if (
-    totalInvoiced >
-    contractValue
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "Project invoiced amount cannot exceed the contract budget",
-      },
-      {
-        status: 400,
-      }
-    );
-  }
-
-  if (
-    currentPaid >
-    totalInvoiced
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "Project paid amount cannot exceed the invoiced amount",
-      },
-      {
-        status: 400,
-      }
-    );
-  }
 
   const outstandingBalance =
     Math.max(
-      totalInvoiced -
+      contractValue -
         currentPaid,
       0
     );
@@ -571,7 +545,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          `Payment exceeds the outstanding invoiced balance of ${outstandingBalance}`,
+          `Payment exceeds the remaining contract balance of ${outstandingBalance}`,
       },
       {
         status: 400,
@@ -649,12 +623,6 @@ export async function POST(
                 0
             );
 
-          const currentInvoiced =
-            Number(
-              currentProject.invoiced ??
-                0
-            );
-
           const currentPaid =
             Number(
               currentProject.paid ??
@@ -663,37 +631,15 @@ export async function POST(
 
           /*
            * -----------------------------------------------------
-           * Validate hierarchy
-           * -----------------------------------------------------
-           */
-
-          if (
-            currentInvoiced >
-            currentBudget
-          ) {
-            throw new Error(
-              "INVOICED_EXCEEDS_BUDGET"
-            );
-          }
-
-          if (
-            currentPaid >
-            currentInvoiced
-          ) {
-            throw new Error(
-              "PAID_EXCEEDS_INVOICED"
-            );
-          }
-
-          /*
-           * -----------------------------------------------------
-           * Latest outstanding balance
+           * Latest outstanding balance (capped directly by
+           * contract budget -- invoicing is informational only
+           * and no longer gates whether a payment is allowed)
            * -----------------------------------------------------
            */
 
           const currentOutstanding =
             Math.max(
-              currentInvoiced -
+              currentBudget -
                 currentPaid,
               0
             );
@@ -824,12 +770,6 @@ export async function POST(
                 0
             );
 
-          const updatedInvoiced =
-            Number(
-              updatedProject.invoiced ??
-                0
-            );
-
           const updatedPaid =
             Number(
               updatedProject.paid ??
@@ -837,20 +777,11 @@ export async function POST(
             );
 
           if (
-            updatedInvoiced >
+            updatedPaid >
             updatedBudget
           ) {
             throw new Error(
-              "UPDATED_INVOICED_EXCEEDS_BUDGET"
-            );
-          }
-
-          if (
-            updatedPaid >
-            updatedInvoiced
-          ) {
-            throw new Error(
-              "UPDATED_PAID_EXCEEDS_INVOICED"
+              "UPDATED_PAID_EXCEEDS_BUDGET"
             );
           }
 
@@ -887,7 +818,7 @@ export async function POST(
 
     const newOutstandingBalance =
       Math.max(
-        newInvoiced -
+        newBudget -
           newPaid,
         0
       );
@@ -1025,57 +956,12 @@ export async function POST(
 
       if (
         error.message ===
-        "INVOICED_EXCEEDS_BUDGET"
+        "UPDATED_PAID_EXCEEDS_BUDGET"
       ) {
         return NextResponse.json(
           {
             error:
-              "The project's invoiced amount exceeds its contract budget. Please correct the project financial records before recording a payment.",
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      if (
-        error.message ===
-        "PAID_EXCEEDS_INVOICED"
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "The project's paid amount already exceeds its invoiced amount. Please correct the project financial records before recording a payment.",
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      if (
-        error.message ===
-        "UPDATED_INVOICED_EXCEEDS_BUDGET"
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "The project's invoiced amount exceeds its contract budget.",
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      if (
-        error.message ===
-        "UPDATED_PAID_EXCEEDS_INVOICED"
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "The project's paid amount exceeds its invoiced amount.",
+              "The project's paid amount exceeds its contract budget.",
           },
           {
             status: 400,
@@ -1097,7 +983,7 @@ export async function POST(
         return NextResponse.json(
           {
             error:
-              `Payment exceeds the outstanding invoiced balance of ${balance}`,
+              `Payment exceeds the remaining contract balance of ${balance}`,
           },
           {
             status: 400,
