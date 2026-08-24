@@ -229,6 +229,27 @@ export async function DELETE(
     }
 
     /*
+     * Also block deletion if there are comment/communication records
+     * tied to this client -- ClientComment.clientId doesn't cascade on
+     * delete (correctly: those records should outlive the client if
+     * the client's projects are still around), so a raw delete would
+     * otherwise fail with a generic error instead of this clear one.
+     */
+    const commentCount = await prisma.clientComment.count({
+      where: { clientId: id },
+    });
+
+    if (commentCount > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot delete a client with existing communication records. Those need to be cleared first.",
+        },
+        { status: 409 }
+      );
+    }
+
+    /*
      * Verify the client exists before deletion.
      */
     const client = await prisma.client.findUnique({

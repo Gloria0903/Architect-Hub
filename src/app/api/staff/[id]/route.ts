@@ -87,6 +87,53 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   if (id === session.user.id) return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
 
-  await prisma.user.delete({ where: { id } });
-  return NextResponse.json({ success: true });
+  const existing = await prisma.user.findUnique({ where: { id }, select: { id: true, name: true } });
+  if (!existing) {
+    return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
+  }
+
+  /*
+   * A staff account almost always has real work attached to it --
+   * assigned projects, daily logs they submitted, documents they
+   * uploaded, payments/invoices they recorded -- none of which cascade
+   * on user deletion (correctly: deleting a person shouldn't delete
+   * the firm's project history or financial records). Attempting a
+   * raw delete against any of that throws an unhandled foreign-key
+   * violation, which is why this previously just silently failed.
+   * Check first and give a clear, actionable answer instead.
+   */
+  const [assignedProjects, supervisedProjects, dailyLogs, documents, payments, invoices] =
+    await Promise.all([
+      prisma.project.count({ where: { architectId: id } }),
+      prisma.project.count({ where: { supervisorId: id } }),
+      prisma.dailyLog.count({ where: { authorId: id } }),
+      prisma.document.count({ where: { uploadedById: id } }),
+      prisma.payment.count({ where: { recordedById: id } }),
+      prisma.invoice.count({ where: { recordedById: id } }),
+    ]);
+
+  const hasHistory =
+    assignedProjects > 0 ||
+    supervisedProjects > 0 ||
+    dailyLogs > 0 ||
+    documents > 0 ||
+    payments > 0 ||
+    invoices > 0;
+
+  if (hasHistory) {
+    return NextResponse.json(
+      {
+        error: `${existing.name} has existing work on record (projects, daily logs, documents, payments, or invoices) and can't be permanently deleted -- that history needs to stay intact. Deactivate their account instead to block their login while keeping the firm's records complete.`,
+      },
+      { status: 409 }
+    );
+  }
+
+  try {
+    await prisma.user.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error(`Failed to delete staff member ${id}:`, error);
+    return NextResponse.json({ error: "Failed to delete staff member" }, { status: 500 });
+  }
 }
