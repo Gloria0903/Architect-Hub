@@ -40,10 +40,13 @@ export default function ProjectsPage() {
   }
 
   const [form, setForm] = useState({ name: "", clientId: "", location: "", description: "", architectId: "", supervisorId: "", startDate: "", dueDate: "", budget: "", priority: "MEDIUM" as Priority });
+  const [creating, setCreating] = useState(false);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (creating) return;
     setCreateError("");
+    setCreating(true);
     try {
       await addProject({
         name: form.name, clientId: form.clientId, location: form.location,
@@ -56,6 +59,8 @@ export default function ProjectsPage() {
       setForm({ name: "", clientId: "", location: "", description: "", architectId: "", supervisorId: "", startDate: "", dueDate: "", budget: "", priority: "MEDIUM" });
     } catch (err) {
       setCreateError((err as Error).message || "Failed to create project");
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -217,7 +222,7 @@ export default function ProjectsPage() {
             {createError && <p className="text-brick text-[12px]">{createError}</p>}
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => setCreateOpen(false)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
-              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Create project</button>
+              <button type="submit" disabled={creating} className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed">{creating ? "Creating…" : "Create project"}</button>
             </div>
           </form>
         </Modal>

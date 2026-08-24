@@ -19,9 +19,11 @@ const CreateProjectSchema = z.object({
   location: z.string().min(2),
   description: z.string().optional(),
 
-  // Project assignment is required
-  architectId: z.string().min(1),
-  supervisorId: z.string().min(1),
+  // Assignment is optional at creation -- lets an admin/senior architect
+  // stand up a project and assign staff to it later, rather than being
+  // forced to pick someone before the project can even exist.
+  architectId: z.string().min(1).optional(),
+  supervisorId: z.string().min(1).optional(),
 
   startDate: z.string(),
   dueDate: z.string(),
@@ -404,45 +406,51 @@ export async function POST(req: NextRequest) {
   }
 
   // ---------------------------------------------------------
-  // Validate assigned architect and supervisor
+  // Validate assigned architect and supervisor (if provided)
   // BEFORE creating the project
   // ---------------------------------------------------------
 
   const [architect, supervisor] =
     await Promise.all([
-      prisma.user.findUnique({
-        where: {
-          id: parsed.data.architectId,
-        },
+      parsed.data.architectId
+        ? prisma.user.findUnique({
+            where: {
+              id: parsed.data.architectId,
+            },
 
-        select: {
-          id: true,
-          role: true,
-          isActive: true,
-        },
-      }),
+            select: {
+              id: true,
+              role: true,
+              isActive: true,
+            },
+          })
+        : Promise.resolve(null),
 
-      prisma.user.findUnique({
-        where: {
-          id: parsed.data.supervisorId,
-        },
+      parsed.data.supervisorId
+        ? prisma.user.findUnique({
+            where: {
+              id: parsed.data.supervisorId,
+            },
 
-        select: {
-          id: true,
-          role: true,
-          isActive: true,
-        },
-      }),
+            select: {
+              id: true,
+              role: true,
+              isActive: true,
+            },
+          })
+        : Promise.resolve(null),
     ]);
 
   // ---------------------------------------------------------
-  // Validate architect
+  // Validate architect (only if one was actually selected --
+  // unassigned is allowed, invalid/inactive is not)
   // ---------------------------------------------------------
 
   if (
-    !architect ||
-    architect.role !== "ARCHITECT" ||
-    !architect.isActive
+    parsed.data.architectId &&
+    (!architect ||
+      architect.role !== "ARCHITECT" ||
+      !architect.isActive)
   ) {
     return NextResponse.json(
       {
@@ -454,12 +462,12 @@ export async function POST(req: NextRequest) {
   }
 
   // ---------------------------------------------------------
-  // Validate supervisor
+  // Validate supervisor (only if one was actually selected)
   // ---------------------------------------------------------
 
   if (
-    !supervisor ||
-    !supervisor.isActive
+    parsed.data.supervisorId &&
+    (!supervisor || !supervisor.isActive)
   ) {
     return NextResponse.json(
       {

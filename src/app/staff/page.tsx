@@ -23,21 +23,32 @@ export default function StaffPage() {
   const [editTarget, setEditTarget] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", role: "ARCHITECT" as Role, department: "", password: "" });
   const [tempPasswordNotice, setTempPasswordNotice] = useState<{ name: string; password: string } | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
   const [invitedNotice, setInvitedNotice] = useState<{ name: string; email: string } | null>(null);
 
   function resetForm() { setForm({ name: "", email: "", phone: "", role: "ARCHITECT", department: "", password: "" }); }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    const { password, ...rest } = form;
-    const result = await addStaff({ ...rest, password: password || undefined });
-    setCreateOpen(false);
-    if (result.invited) {
-      setInvitedNotice({ name: form.name, email: form.email });
-    } else if (result.temporaryPassword) {
-      setTempPasswordNotice({ name: form.name, password: result.temporaryPassword });
+    if (creating) return;
+    setCreateError("");
+    setCreating(true);
+    try {
+      const { password, ...rest } = form;
+      const result = await addStaff({ ...rest, password: password || undefined });
+      setCreateOpen(false);
+      if (result.invited) {
+        setInvitedNotice({ name: form.name, email: form.email });
+      } else if (result.temporaryPassword) {
+        setTempPasswordNotice({ name: form.name, password: result.temporaryPassword });
+      }
+      resetForm();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Failed to add staff member.");
+    } finally {
+      setCreating(false);
     }
-    resetForm();
   }
 
   function openEdit(id: string) {
@@ -162,9 +173,10 @@ export default function StaffPage() {
             </FormRow>
             <Field label="Initial password (optional)"><Input type="text" value={form.password} onChange={e => setForm(f=>({...f,password:e.target.value}))} placeholder="Leave blank to auto-generate a secure temp password" /></Field>
             <p className="text-[11px] text-muted -mt-2">They must reset this on first login. If left blank, a secure temporary password is generated and shown once after creation — share it with them securely.</p>
+            {createError && <p className="text-brick text-[12px] -mt-1">{createError}</p>}
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => { setCreateOpen(false); resetForm(); }} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
-              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Add member</button>
+              <button type="submit" disabled={creating} className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed">{creating ? "Adding…" : "Add member"}</button>
             </div>
           </form>
         </Modal>

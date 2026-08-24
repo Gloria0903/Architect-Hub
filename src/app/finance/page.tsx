@@ -39,6 +39,7 @@ export default function FinancePage() {
   const [open, setOpen] = useState(false);
 
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const [selectedProject, setSelectedProject] =
     useState<string | null>(null);
@@ -315,6 +316,8 @@ export default function FinancePage() {
   ) {
     e.preventDefault();
 
+    if (submitting) return;
+
     const amount = Number(form.amount);
 
     if (
@@ -358,6 +361,7 @@ export default function FinancePage() {
       return;
     }
 
+    setSubmitting(true);
     try {
       await addPayment({
         projectId: form.projectId,
@@ -387,6 +391,8 @@ export default function FinancePage() {
           ? error.message
           : "Failed to record payment."
       );
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -400,6 +406,8 @@ export default function FinancePage() {
     e: React.FormEvent<HTMLFormElement>
   ) {
     e.preventDefault();
+
+    if (submitting) return;
 
     const amount = Number(invoiceForm.amount);
 
@@ -444,6 +452,7 @@ export default function FinancePage() {
       return;
     }
 
+    setSubmitting(true);
     try {
       await addInvoice({
         projectId: invoiceForm.projectId,
@@ -473,6 +482,8 @@ export default function FinancePage() {
           ? error.message
           : "Failed to record invoice."
       );
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -1188,7 +1199,7 @@ export default function FinancePage() {
 
               <button
                 type="submit"
-                disabled={(() => {
+                disabled={submitting || (() => {
                   if (
                     !form.projectId ||
                     !form.amount
@@ -1225,7 +1236,7 @@ export default function FinancePage() {
                 })()}
                 className="px-4 py-2 rounded-md text-[12.5px] bg-moss text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Record payment
+                {submitting ? "Recording…" : "Record payment"}
               </button>
             </div>
           </form>
@@ -1465,7 +1476,7 @@ export default function FinancePage() {
 
               <button
                 type="submit"
-                disabled={(() => {
+                disabled={submitting || (() => {
                   if (!invoiceForm.projectId || !invoiceForm.amount) {
                     return true;
                   }
@@ -1488,7 +1499,7 @@ export default function FinancePage() {
                 })()}
                 className="px-4 py-2 rounded-md text-[12.5px] bg-blueprint text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Record invoice
+                {submitting ? "Recording…" : "Record invoice"}
               </button>
             </div>
           </form>
