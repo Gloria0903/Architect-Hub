@@ -45,7 +45,7 @@ export function NotificationBell() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/notifications?limit=20");
+      const res = await fetch("/api/notifications?unreadOnly=true&limit=20");
       if (!res.ok) return;
       const data = await res.json();
       setNotifications(data.notifications ?? []);
@@ -74,13 +74,13 @@ export function NotificationBell() {
   }, []);
 
   async function markRead(id: string) {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
     setUnreadCount((c) => Math.max(0, c - 1));
     await fetch(`/api/notifications/${id}`, { method: "PATCH" }).catch(() => {});
   }
 
   async function markAllRead() {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifications([]);
     setUnreadCount(0);
     await fetch("/api/notifications/read-all", { method: "PATCH" }).catch(() => {});
   }
@@ -115,17 +115,18 @@ export function NotificationBell() {
           </div>
           <div className="overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="px-3.5 py-8 text-center text-muted text-[12px]">No notifications yet.</div>
+              <div className="px-3.5 py-8 text-center text-muted text-[12px]">You&apos;re all caught up.</div>
             ) : (
               notifications.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => !n.read && markRead(n.id)}
-                  className={`w-full text-left px-3.5 py-2.5 border-b border-line last:border-b-0 hover:bg-vellum/60 transition-colors flex gap-2 ${n.read ? "" : "bg-blueprint-bg/30"}`}
+                  onClick={() => markRead(n.id)}
+                  title="Click to mark as read and clear"
+                  className="w-full text-left px-3.5 py-2.5 border-b border-line last:border-b-0 hover:bg-vellum/60 transition-colors flex gap-2 bg-blueprint-bg/30"
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${TYPE_DOT[n.type]} ${n.read ? "opacity-30" : ""}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${TYPE_DOT[n.type]}`} />
                   <span className="flex-1 min-w-0">
-                    <span className={`block text-[12px] leading-snug ${n.read ? "text-muted" : "text-ink"}`}>{n.message}</span>
+                    <span className="block text-[12px] leading-snug text-ink">{n.message}</span>
                     <span className="block text-[10.5px] text-muted mt-0.5">{timeAgo(n.createdAt)}</span>
                   </span>
                 </button>
