@@ -487,6 +487,7 @@ interface AppActions {
     }
   ) => Promise<{
     temporaryPassword?: string;
+    invited?: boolean;
   }>;
 
   updateStaff: (
@@ -923,6 +924,7 @@ export function AppProvider({
       const result =
         await apiFetch<{
           temporaryPassword?: string;
+          invited?: boolean;
         }>("/api/staff", {
           method: "POST",
           body: JSON.stringify({

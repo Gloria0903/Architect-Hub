@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Input, Select, Field, FormRow } from "@/components/ui/form-field";
 import { useStore, roleLabel, Role } from "@/store/app-store";
-import { Plus, Trash2, Edit2, ShieldAlert } from "lucide-react";
+import { Plus, Trash2, Edit2, ShieldAlert, CheckCircle } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 
 const roleColors: Record<Role, string> = {
@@ -23,6 +23,7 @@ export default function StaffPage() {
   const [editTarget, setEditTarget] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", role: "ARCHITECT" as Role, department: "", password: "" });
   const [tempPasswordNotice, setTempPasswordNotice] = useState<{ name: string; password: string } | null>(null);
+  const [invitedNotice, setInvitedNotice] = useState<{ name: string; email: string } | null>(null);
 
   function resetForm() { setForm({ name: "", email: "", phone: "", role: "ARCHITECT", department: "", password: "" }); }
 
@@ -31,7 +32,11 @@ export default function StaffPage() {
     const { password, ...rest } = form;
     const result = await addStaff({ ...rest, password: password || undefined });
     setCreateOpen(false);
-    if (result.temporaryPassword) setTempPasswordNotice({ name: form.name, password: result.temporaryPassword });
+    if (result.invited) {
+      setInvitedNotice({ name: form.name, email: form.email });
+    } else if (result.temporaryPassword) {
+      setTempPasswordNotice({ name: form.name, password: result.temporaryPassword });
+    }
     resetForm();
   }
 
@@ -203,6 +208,26 @@ export default function StaffPage() {
             <button
               type="button"
               onClick={() => setTempPasswordNotice(null)}
+              className="self-end px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium"
+            >
+              Done
+            </button>
+          </div>
+        </Modal>
+
+        {/* Invite sent notice */}
+        <Modal open={!!invitedNotice} onClose={() => setInvitedNotice(null)} title="Invite sent">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-moss text-[13px] font-medium">
+              <CheckCircle size={16} />
+              Invite email sent
+            </div>
+            <p className="text-muted text-[12.5px]">
+              <span className="text-ink font-medium">{invitedNotice?.name}</span> has been sent a secure setup link at <span className="text-ink font-medium">{invitedNotice?.email}</span>. It expires in 1 hour — they can request a new one via &quot;Forgot password&quot; if it lapses before they use it.
+            </p>
+            <button
+              type="button"
+              onClick={() => setInvitedNotice(null)}
               className="self-end px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium"
             >
               Done

@@ -10,6 +10,7 @@ import { Input, Select, Textarea, Field, FormRow } from "@/components/ui/form-fi
 import { useStore, formatKsh, ProjectStatus, Priority } from "@/store/app-store";
 import { Plus, Repeat, Eye, Trash2, Archive } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 type Filter = ProjectStatus | "all";
 
@@ -86,6 +87,7 @@ export default function ProjectsPage() {
             <p className="text-muted text-[12px] mt-0.5">{projects.length} {hasFirmWideView ? "projects" : "projects assigned to you"} — click a project to view full details</p>
           </div>
           <div className="flex items-center gap-2">
+            <RefreshButton />
             {isAdmin && (
               <Link href="/projects/archived" className="flex items-center gap-1.5 border border-line text-muted rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:text-ink hover:border-ink">
                 <Archive size={15} />Archived

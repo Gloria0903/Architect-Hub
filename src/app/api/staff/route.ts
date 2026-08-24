@@ -3,11 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { canManageStaff, isAdmin } from "@/lib/rbac";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { z } from "zod";
 import {
   generateTemporaryPassword,
   validatePassword,
 } from "@/lib/password-policy";
+import { redisConfigured } from "@/lib/redis";
+import { enqueueEmail } from "@/lib/queues/email-queue";
 
 /*
 |--------------------------------------------------------------------------
@@ -391,10 +394,21 @@ export async function POST(req: NextRequest) {
 
     plainPassword = password;
   } else {
-    temporaryPassword =
-      generateTemporaryPassword();
+    plainPassword = generateTemporaryPassword();
 
-    plainPassword = temporaryPassword;
+    /*
+     * Prefer inviting via email over ever displaying a plaintext
+     * password: if email delivery is configured, the new person sets
+     * their own password through a secure one-time link (same
+     * mechanism as forgot-password) and this generated password is
+     * never shown to anyone, including the admin creating the account.
+     * Only fall back to returning it in the API response (for the
+     * admin to relay manually) when email isn't configured at all --
+     * an account with no way to reach it otherwise would be locked out.
+     */
+    if (!redisConfigured) {
+      temporaryPassword = plainPassword;
+    }
   }
 
   /*
@@ -488,11 +502,66 @@ export async function POST(req: NextRequest) {
 
     /*
      * ----------------------------------------------------------------------
+     * Invite email
+     * ----------------------------------------------------------------------
+     *
+     * Only when the admin didn't supply a password directly, and email
+     * delivery is actually configured (see the plainPassword branch
+     * above for the fallback when it isn't).
+     *
+     * Reuses the exact same PasswordResetToken mechanism and
+     * /reset-password page as "forgot password" -- a secure, single-use,
+     * time-limited link, not a plaintext password in an email.
+     */
+
+    if (!password && redisConfigured) {
+      try {
+        const INVITE_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour, same as password reset
+
+        const rawToken = crypto.randomBytes(32).toString("hex");
+        const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+        await prisma.passwordResetToken.create({
+          data: {
+            tokenHash,
+            userId: user.id,
+            expiresAt: new Date(Date.now() + INVITE_TOKEN_TTL_MS),
+          },
+        });
+
+        const baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, "");
+
+        if (baseUrl) {
+          await enqueueEmail({
+            kind: "ACCOUNT_INVITE",
+            to: user.email,
+            recipientName: user.name,
+            role: user.role,
+            invitedBy: session.user.name ?? "Your admin",
+            setupUrl: `${baseUrl}/reset-password?token=${rawToken}`,
+            expiresInMinutes: INVITE_TOKEN_TTL_MS / 60_000,
+          });
+        } else {
+          console.error("NEXTAUTH_URL is not configured -- could not send invite email.");
+        }
+      } catch (error) {
+        // Don't fail account creation over an email hiccup -- the admin
+        // can still see the account was created and resend an invite
+        // (or use forgot-password) if the email never arrives.
+        console.error("Failed to send invite email:", error);
+      }
+    }
+
+    /*
+     * ----------------------------------------------------------------------
      * Return created account
      * ----------------------------------------------------------------------
      *
-     * temporaryPassword exists only when the administrator did not provide
-     * a password.
+     * temporaryPassword exists only when email delivery wasn't available
+     * and the administrator needs to relay a password manually.
+     *
+     * invited is true when an invite email was actually sent, so the UI
+     * can show the right confirmation message.
      *
      * Never return the bcrypt hash.
      */
@@ -506,6 +575,8 @@ export async function POST(req: NextRequest) {
               temporaryPassword,
             }
           : {}),
+
+        invited: !password && redisConfigured,
       },
       {
         status: 201,

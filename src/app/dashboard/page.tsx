@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -16,6 +17,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 export default function DashboardPage() {
   const {
@@ -29,6 +31,7 @@ export default function DashboardPage() {
   } = useStore();
 
   const { data: session } = useSession();
+  const router = useRouter();
 
   const isAdmin = session?.user?.role === "ADMIN";
   const isSeniorArchitect = session?.user?.role === "SENIOR_ARCHITECT";
@@ -333,6 +336,8 @@ const totalOutstanding = Math.max(
                 : "projects assigned to you"}
             </p>
           </div>
+
+          <RefreshButton />
         </div>
 
         {/* ----------------------------------------------------------------- */}
@@ -342,7 +347,8 @@ const totalOutstanding = Math.max(
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3.5">
           {/* Active projects */}
 
-          <Card className="p-3.5">
+          <Link href="/projects">
+          <Card className="p-3.5 cursor-pointer transition-colors hover:border-blueprint/40 hover:bg-blueprint-bg/30">
             <div className="text-muted text-[11px]">
               Active projects
             </div>
@@ -355,11 +361,13 @@ const totalOutstanding = Math.max(
               ↑ {onTrack.length} on track
             </div>
           </Card>
+          </Link>
 
           {/* Revenue / comments */}
 
           {hasFirmWideView ? (
-            <Card className="p-3.5">
+            <Link href="/finance">
+            <Card className="p-3.5 cursor-pointer transition-colors hover:border-blueprint/40 hover:bg-blueprint-bg/30">
               <div className="text-muted text-[11px]">
                 Total revenue
               </div>
@@ -373,8 +381,10 @@ const totalOutstanding = Math.max(
                 {formatKsh(totalOutstanding)}
               </div>
             </Card>
+            </Link>
           ) : (
-            <Card className="p-3.5">
+            <Link href="/client-comms">
+            <Card className="p-3.5 cursor-pointer transition-colors hover:border-blueprint/40 hover:bg-blueprint-bg/30">
               <div className="text-muted text-[11px]">
                 Unresolved client comments
               </div>
@@ -387,11 +397,13 @@ const totalOutstanding = Math.max(
                 {delayed.length} delayed
               </div>
             </Card>
+            </Link>
           )}
 
           {/* Daily logs */}
 
-          <Card className="p-3.5">
+          <Link href="/daily-logs">
+          <Card className="p-3.5 cursor-pointer transition-colors hover:border-blueprint/40 hover:bg-blueprint-bg/30">
             <div className="text-muted text-[11px]">
               {hasFirmWideView
                 ? "Logs today"
@@ -412,11 +424,13 @@ const totalOutstanding = Math.max(
               </div>
             )}
           </Card>
+          </Link>
 
           {/* Admin comments */}
 
           {hasFirmWideView && (
-            <Card className="p-3.5">
+            <Link href="/client-comms">
+            <Card className="p-3.5 cursor-pointer transition-colors hover:border-blueprint/40 hover:bg-blueprint-bg/30">
               <div className="text-muted text-[11px]">
                 Unresolved client comments
               </div>
@@ -429,6 +443,7 @@ const totalOutstanding = Math.max(
                 {delayed.length} delayed projects
               </div>
             </Card>
+            </Link>
           )}
         </div>
 
@@ -445,7 +460,10 @@ const totalOutstanding = Math.max(
         >
           {/* Project health */}
 
-          <Card className="p-3.5">
+          <Card
+            onClick={() => router.push("/projects")}
+            className="p-3.5 cursor-pointer transition-colors hover:border-blueprint/40 hover:bg-blueprint-bg/30"
+          >
             <div className="font-medium text-ink text-[12.5px] mb-3">
               Project health
             </div>
@@ -568,7 +586,10 @@ const totalOutstanding = Math.max(
 
           {/* Weekly logs */}
 
-          <Card className="p-3.5">
+          <Card
+            onClick={() => router.push("/daily-logs")}
+            className="p-3.5 cursor-pointer transition-colors hover:border-blueprint/40 hover:bg-blueprint-bg/30"
+          >
             <div className="font-medium text-ink text-[12.5px] mb-2">
               {hasFirmWideView
                 ? "Daily logs this week"
@@ -637,7 +658,10 @@ const totalOutstanding = Math.max(
           {/* Revenue trend */}
 
           {hasFirmWideView && (
-            <Card className="p-3.5">
+            <Card
+              onClick={() => router.push("/finance")}
+              className="p-3.5 cursor-pointer transition-colors hover:border-blueprint/40 hover:bg-blueprint-bg/30"
+            >
               <div className="flex justify-between items-center mb-2">
                 <div className="font-medium text-ink text-[12.5px]">
                   Revenue trend

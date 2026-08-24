@@ -14,6 +14,7 @@ import {
   FormRow,
 } from "@/components/ui/form-field";
 import { useStore, formatKsh } from "@/store/app-store";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import {
   Plus,
   TrendingUp,
@@ -384,6 +385,8 @@ export default function FinancePage() {
             </p>
           </div>
 
+          <div className="flex items-center gap-2">
+          <RefreshButton />
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -392,6 +395,7 @@ export default function FinancePage() {
             <Plus size={15} />
             Record payment
           </button>
+          </div>
         </div>
 
         {/* ------------------------------------------------------------------ */}
@@ -816,12 +820,22 @@ export default function FinancePage() {
                   const paid =
                     getPaid(project);
 
+                  // Only block genuinely settled projects -- invoiced
+                  // AND fully paid off. A project that simply hasn't
+                  // been invoiced yet (invoiced === 0) still shows
+                  // outstanding === 0 by the math, but that's a project
+                  // waiting for its first invoice/advance payment, not
+                  // one that's done -- it should stay selectable. This
+                  // was disabling nearly every active project before.
+                  const isFullySettled =
+                    invoiced > 0 && outstanding <= 0;
+
                   return (
                     <option
                       key={project.id}
                       value={project.id}
                       disabled={
-                        outstanding <= 0
+                        isFullySettled
                       }
                     >
                       {project.sheetNo} —{" "}

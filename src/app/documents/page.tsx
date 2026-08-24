@@ -21,6 +21,7 @@ import {
 } from "@/store/app-store";
 
 import { DocumentUploader } from "@/components/documents/document-uploader";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 const typeIcon: Record<string, React.ReactNode> = {
   pdf: (
@@ -217,7 +218,8 @@ export default function DocumentsPage() {
     <AppShell>
       <div>
         {/* HEADER */}
-        <div className="mb-5">
+        <div className="mb-5 flex items-start justify-between">
+          <div>
           <h1 className="font-display text-[20px] font-bold text-ink">
             Documents
           </h1>
@@ -227,6 +229,9 @@ export default function DocumentsPage() {
             BOQs, contracts, reports,
             images and project media
           </p>
+          </div>
+
+          <RefreshButton />
         </div>
 
         {/* DRAG & DROP UPLOAD SECTION */}

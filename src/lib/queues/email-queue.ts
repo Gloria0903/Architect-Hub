@@ -27,6 +27,16 @@ export type EmailJobPayload =
       resetUrl: string;
       expiresInMinutes: number;
     }
+
+  | {
+      kind: "ACCOUNT_INVITE";
+      to: string;
+      recipientName: string;
+      role: "ADMIN" | "SENIOR_ARCHITECT" | "ARCHITECT";
+      invitedBy: string;
+      setupUrl: string;
+      expiresInMinutes: number;
+    }
     
   | {
       kind: "DOCUMENT_UPLOADED";

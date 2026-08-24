@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { useStore } from "@/store/app-store";
 import { Plus, ChevronDown, ChevronUp, AlertTriangle, Paperclip, FileText } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { useSession } from "next-auth/react";
 
 export default function DailyLogsPage() {
@@ -44,9 +45,12 @@ const [expandedId, setExpandedId] = useState<string | null>(null);
             <h1 className="font-display font-bold text-[20px] text-ink">Daily logs</h1>
             <p className="text-muted text-[12px] mt-0.5">{logs.length} total submissions</p>
           </div>
+          <div className="flex items-center gap-2">
+          <RefreshButton />
           <Link href="/daily-logs/new" className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90">
             <Plus size={15} />Submit log
           </Link>
+          </div>
         </div>
 
         {/* Missing logs alert */}

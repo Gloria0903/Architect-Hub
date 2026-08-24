@@ -63,6 +63,25 @@ export function renderEmail(payload: EmailJobPayload): { subject: string; html: 
         }),
       };
 
+    case "ACCOUNT_INVITE": {
+      const roleLabel =
+        payload.role === "ADMIN"
+          ? "Admin"
+          : payload.role === "SENIOR_ARCHITECT"
+            ? "Senior Architect"
+            : "Architect";
+      return {
+        subject: "You've been invited to Architect Hub",
+        html: layout({
+          preheader: `${payload.invitedBy} invited you to join Architect Hub`,
+          heading: "Welcome to Architect Hub",
+          body: `Hi ${payload.recipientName},<br/><br/>${payload.invitedBy} has set up an account for you at Architect Hub as a <strong>${roleLabel}</strong>. Click below to set your password and get started — this link expires in ${payload.expiresInMinutes} minutes. If you weren't expecting this, you can safely ignore this email.`,
+          ctaLabel: "Set up your account",
+          ctaUrl: payload.setupUrl,
+        }),
+      };
+    }
+
     case "PROJECT_ASSIGNED": {
       const projectUrl = `${APP_URL}/projects/${payload.projectId}`;
       return {
