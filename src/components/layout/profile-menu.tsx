@@ -2,13 +2,15 @@
 import { useState, useRef, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { LogOut, User, Bell } from "lucide-react";
+import { LogOut, User, Bell, Sun, Moon, Monitor } from "lucide-react";
 import { useStore, roleLabel, Role } from "@/store/app-store";
 import { Avatar } from "@/components/ui/avatar";
+import { useTheme } from "@/components/theme-provider";
 
 export function ProfileMenu() {
   const { data: session } = useSession();
   const { notifications, markNotificationRead, staff } = useStore();
+  const { theme, setTheme } = useTheme();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -44,12 +46,13 @@ export function ProfileMenu() {
         {notifOpen && (
           <div className="absolute right-0 mt-2 w-72 bg-surface border border-line rounded-card shadow-xl z-50 max-h-80 overflow-y-auto">
             <div className="px-3.5 py-2.5 border-b border-line text-[12px] font-medium text-ink">Notifications</div>
-            {notifications.length === 0 && <div className="px-3.5 py-4 text-[12px] text-muted text-center">No notifications yet.</div>}
-            {notifications.slice(0, 10).map(n => (
+            {unread.length === 0 && <div className="px-3.5 py-4 text-[12px] text-muted text-center">You&apos;re all caught up.</div>}
+            {unread.slice(0, 10).map(n => (
               <div
                 key={n.id}
                 onClick={() => markNotificationRead(n.id)}
-                className={`px-3.5 py-2.5 text-[11.5px] border-b border-line last:border-0 cursor-pointer hover:bg-vellum/50 ${n.read ? "text-muted" : "text-ink"}`}
+                title="Click to mark as read and clear"
+                className="px-3.5 py-2.5 text-[11.5px] border-b border-line last:border-0 cursor-pointer hover:bg-vellum/50 text-ink"
               >
                 {n.message}
               </div>
@@ -74,6 +77,30 @@ export function ProfileMenu() {
               <span className="inline-block mt-1.5 text-[10px] bg-blueprint-bg text-blueprint px-1.5 py-0.5 rounded-[3px] font-medium">
                 {roleLabel(session.user.role as Role)}
               </span>
+            </div>
+            <div className="px-3.5 py-2.5 border-b border-line">
+              <div className="text-muted text-[10.5px] font-medium uppercase tracking-wide mb-1.5">Theme</div>
+              <div className="flex gap-1">
+                {([
+                  { value: "light" as const, icon: Sun, label: "Light" },
+                  { value: "dark" as const, icon: Moon, label: "Dark" },
+                  { value: "system" as const, icon: Monitor, label: "System" },
+                ]).map(({ value, icon: Icon, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setTheme(value)}
+                    title={label}
+                    aria-pressed={theme === value}
+                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-medium transition-colors ${
+                      theme === value
+                        ? "bg-ink text-surface"
+                        : "text-muted hover:bg-vellum"
+                    }`}
+                  >
+                    <Icon size={12} />
+                  </button>
+                ))}
+              </div>
             </div>
             <button
               onClick={() => { setOpen(false); router.push("/settings"); }}

@@ -2,19 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Color values as space-separated RGB triples (not hex) -- required
+ * for Tailwind's rgb(var(--x) / <alpha-value>) opacity-modifier
+ * technique used in tailwind.config.js. Light values are the app's
+ * original palette, unchanged; dark values are a matching palette
+ * designed for the same relative contrast/roles on dark backgrounds.
+ */
+:root {
+  --color-vellum: 236 239 238;
+  --color-surface: 255 255 255;
+  --color-ink: 19 25 31;
+  --color-ink-sidebar: 15 22 32;
+  --color-muted: 107 118 128;
+  --color-blueprint: 36 81 196;
+  --color-blueprint-bg: 231 237 250;
+  --color-blueprint-50: 230 241 251;
+  --color-blueprint-600: 36 81 196;
+  --color-brick: 181 80 46;
+  --color-brick-bg: 247 233 227;
+  --color-moss: 47 122 94;
+  --color-moss-bg: 230 240 234;
+  --color-ochre: 176 127 31;
+  --color-ochre-bg: 246 238 221;
+  --color-line: 222 227 229;
+}
+
+.dark {
+  --color-vellum: 18 21 25;
+  --color-surface: 27 32 38;
+  --color-ink: 231 233 236;
+  /* Sidebar is already dark-styled in light mode -- kept identical in
+     dark mode rather than getting darker still, which would remove
+     the visual separation between sidebar and page content. */
+  --color-ink-sidebar: 15 22 32;
+  --color-muted: 148 158 168;
+  --color-blueprint: 108 152 235;
+  --color-blueprint-bg: 30 42 71;
+  --color-blueprint-50: 30 42 71;
+  --color-blueprint-600: 108 152 235;
+  --color-brick: 226 137 106;
+  --color-brick-bg: 58 36 28;
+  --color-moss: 106 196 160;
+  --color-moss-bg: 27 50 38;
+  --color-ochre: 217 165 61;
+  --color-ochre-bg: 58 46 20;
+  --color-line: 44 50 58;
+}
+
 html,
 body {
-  background-color: #ECEFEE;
-  color: #13191F;
+  background-color: rgb(var(--color-vellum));
+  color: rgb(var(--color-ink));
 }
 
 * {
-  border-color: #DEE3E5;
+  border-color: rgb(var(--color-line));
 }
 
 ::selection {
-  background-color: #E7EDFA;
-  color: #2451C4;
+  background-color: rgb(var(--color-blueprint-bg));
+  color: rgb(var(--color-blueprint));
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -22,6 +70,6 @@ body {
   height: 6px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: #C8D0D3;
+  background-color: rgb(var(--color-line));
   border-radius: 4px;
 }
