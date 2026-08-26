@@ -1,5 +1,4 @@
 import { Search } from "lucide-react";
-import { NotificationBell } from "@/components/notifications/notification-bell";
 
 export function Topbar({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
