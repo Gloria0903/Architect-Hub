@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { enqueueEmail, type EmailJobPayload } from "@/lib/queues/email-queue";
+import { renderEmail } from "@/lib/email/templates";
+import { sendEmail } from "@/lib/email/resend";
+import { redisConfigured } from "@/lib/redis";
 import { Prisma } from "@prisma/client";
 
 type NotificationType = "INFO" | "WARNING" | "SUCCESS" | "ERROR";
@@ -38,7 +41,39 @@ async function dispatch(params: {
 
   if (!user || !user.isActive || !user.email) return;
 
-  await enqueueEmail(params.buildEmail({ email: user.email, name: user.name }));
+  const payload = params.buildEmail({ email: user.email, name: user.name });
+
+  /*
+   * Sent directly rather than only enqueued: these are transactional
+   * (fired in response to a real user action -- assignment, an upload,
+   * etc.), low-volume, and time-sensitive. Relying solely on the BullMQ
+   * queue means relying on a persistent worker process, which never
+   * runs at all on serverless hosting (Vercel) -- that was the actual
+   * reason "assign an architect, they get an email" wasn't working
+   * regardless of how correctly the rest of this was wired.
+   *
+   * Still enqueued too, IF Redis is configured, purely as a retry
+   * safety net for a transient Resend failure -- if the direct send
+   * below throws, the job sits in the queue for a worker (if one is
+   * running, e.g. on Railway) to retry with backoff instead of the
+   * notification being lost outright. If Redis isn't configured at
+   * all, the direct send is the only delivery path, which is fine --
+   * it's synchronous and doesn't depend on anything else running.
+   */
+  try {
+    const { subject, html } = renderEmail(payload);
+    await sendEmail({ to: payload.to, subject, html });
+  } catch (error) {
+    console.error(`Failed to send notification email to ${user.email}:`, error);
+
+    if (redisConfigured) {
+      try {
+        await enqueueEmail(payload);
+      } catch (queueError) {
+        console.error("Failed to enqueue fallback email job:", queueError);
+      }
+    }
+  }
 }
 
 export async function notifyProjectAssignment(params: {
