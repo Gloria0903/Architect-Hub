@@ -103,13 +103,197 @@ the commented-out `migrate-production` job in `.github/workflows/ci.yml`
 production automatically on every push to `main`, ahead of Railway's own
 auto-deploy picking up the same commit.
 
+## Alternative: HostPinnacle shared hosting (cPanel, Node.js App)
+
+Confirmed with HostPinnacle support directly (not guessed): Node.js 22
+supported, SSH available on request, cron jobs supported, Postgres port
+5432 reachable. **Not** supported on shared plans: a second persistent
+process, or Redis (their support explicitly recommends VPS for that).
+This app has been engineered to not strictly need either -- see below.
+
+### 1. Request SSH access
+
+Ask HostPinnacle support to enable SSH/terminal access for your
+package (confirmed available on request, not on by default).
+
+### 2. Set up the Node.js app in cPanel
+
+cPanel → Software → **Setup Node.js App** → Create Application:
+- Node.js version: **22**
+- Application root: e.g. `architect-hub`
+- Application URL: your domain
+- **Application startup file: `server.js`** -- cPanel's Node.js
+  Selector runs a literal `.js` file via `node`, not an npm script like
+  `next start`. `server.js` at the repo root exists specifically for
+  this -- see the comment in that file for why.
+
+### 3. Environment variables
+
+Set these via cPanel's Node.js App interface (or a `.env` file in the
+application root, per their support's answer):
+
+```
+DATABASE_URL=<Supabase pooled connection string>
+DIRECT_URL=<Supabase direct connection string>
+AUTH_SECRET=<generate as in step 3 of the Railway section above>
+NEXTAUTH_URL=https://your-domain
+NEXT_PUBLIC_APP_URL=https://your-domain
+DISABLE_STANDALONE_BUILD=true
+CRON_SECRET=<generate the same way as AUTH_SECRET>
+AWS_REGION / AWS_S3_BUCKET / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+RESEND_API_KEY / RESEND_FROM_EMAIL
+NODE_ENV=production
+```
+
+**Deliberately omit `REDIS_URL`.** Leaving it unset is the intended
+configuration for this path, not a workaround -- every Redis-dependent
+feature already degrades gracefully without it (see
+`src/lib/notifications.ts` and `src/lib/redis.ts`): transactional
+emails (assignment, upload, comment, payment) send directly within the
+request regardless, and scheduled reminders run via the cron endpoint
+below instead of the BullMQ-backed worker. The only real loss is a
+retry safety net if Resend has a transient failure sending one of those
+transactional emails -- acceptable at small scale, revisit if that
+becomes a real problem.
+
+### 4. Build and start
+
+Via the SSH access from step 1, **clone the repo directly** (rather
+than uploading a zip) -- this is what makes automated deploys possible
+later, since `git pull` needs a real git checkout to work against:
+
+```bash
+git clone https://github.com/Gloria0903/Architect-Hub.git architect-hub
+cd architect-hub
+# create your .env file here with the variables from step 3
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run build
+```
+Then start the app from cPanel's Node.js App interface (it manages the
+running process for you from here).
+
+### 5. Scheduled reminders via cron
+
+cPanel → **Cron Jobs** → add a job (once daily is enough) running:
+```bash
+curl "https://your-domain/api/cron/reminders?secret=<CRON_SECRET>"
+```
+
+### 6. Automating deploys (push to GitHub → it updates live)
+
+Unlike Vercel/Railway, cPanel has no native "watch my GitHub repo"
+integration -- without this section, every code change means SSHing in
+and manually running `git pull` + rebuild + restart yourself, every
+time. `.github/workflows/ci.yml` already has a commented-out
+`deploy-hostpinnacle` job that automates exactly that, gated on your
+existing tests passing first (same "only deploy if CI is green"
+principle as the Railway path). Two **separate** SSH key pairs are
+involved here -- easy to mix up, so the distinction is worth being
+explicit about:
+
+**Key pair 1 — lets your SERVER pull from GitHub** (needed regardless
+of whether you automate deploys, since even a manual `git pull` needs
+this):
+1. On the server (via SSH): `ssh-keygen -t ed25519 -C "hostpinnacle-deploy"`
+   (accept the default file location, no passphrase needed for this use)
+2. `cat ~/.ssh/id_ed25519.pub` and copy the output
+3. GitHub → your repo → Settings → **Deploy keys** → Add deploy key →
+   paste it, read-only access is enough
+
+**Key pair 2 — lets GITHUB ACTIONS reach your SERVER** (only needed if
+you want the automated push-to-deploy pipeline, not for manual deploys):
+1. On your own machine (not the server): generate a fresh key pair,
+   e.g. `ssh-keygen -t ed25519 -f hostpinnacle_deploy_key -C "github-actions"`
+2. Add the **public** half (`hostpinnacle_deploy_key.pub`) to the
+   server via cPanel's **SSH Access** tool → Manage SSH Keys → Import Key
+3. Add the **private** half (`hostpinnacle_deploy_key`, the whole file
+   contents) as a GitHub repo secret named `HOSTPINNACLE_SSH_KEY`
+   (Settings → Secrets and variables → Actions)
+4. Also add `HOSTPINNACLE_SSH_HOST`, `HOSTPINNACLE_SSH_USER`, and
+   `HOSTPINNACLE_APP_PATH` (the directory name from step 4 above, e.g.
+   `architect-hub`) as secrets the same way
+5. Uncomment the `deploy-hostpinnacle` job in `.github/workflows/ci.yml`
+
+After this, every push to `main` that passes tests automatically pulls
+the new code, reinstalls dependencies, applies any new migrations,
+rebuilds, and restarts the app -- the same experience you already have
+on Vercel/Railway, just built rather than provided by the platform.
+
+### 7. Migrating to VPS later
+
+When you outgrow this: `DATABASE_URL`/`DIRECT_URL` (Supabase),
+`RESEND_API_KEY`, and every other env var above carry over unchanged.
+On a VPS you'd additionally set `REDIS_URL` (restoring the full
+worker-backed retry safety net) and run the real persistent worker
+(`npm run worker`) instead of the cron endpoint -- nothing about the
+app itself needs to change, only where and how it's deployed.
+
+## Alternative: shared hosting with a Node.js app runner (general)
+
+This path exists for hosting that runs a single managed Node.js process
+per app slot, with no way to also run a second always-on background
+worker -- common on shared hosting control panels (DirectAdmin's
+"Node.js Selector", cPanel's equivalent). Confirm with your host first
+that Node.js 22 is supported and you get real SSH access -- see the
+verification checklist you already have for exactly what to ask.
+
+Differences from the Railway path above:
+
+1. **Set `DISABLE_STANDALONE_BUILD=true`** in the environment before
+   building. Standalone output's `server.js` needs the static assets
+   and `public/` folder manually copied alongside it (the Dockerfile
+   does this with explicit `COPY` steps) -- most managed Node.js
+   hosting panels have no way to do that copy step, so a plain
+   `next build` + `next start` is simpler and is what this variable
+   switches to.
+
+2. **No second worker process.** Instead:
+   - Transactional emails (assignment, upload, comment, payment) work
+     with zero extra setup either way -- they send directly within the
+     request, see `src/lib/notifications.ts`.
+   - Scheduled reminders (deadline approaching, missing daily reports)
+     need `/api/cron/reminders` hit periodically by an external cron
+     service instead of the persistent worker in
+     `src/jobs/reminders-worker.ts`. Set `CRON_SECRET` (see
+     `.env.example`), then point your host's cron job feature (or an
+     external free service like cron-job.org if the host's own cron
+     can't make outbound HTTPS requests) at:
+     ```
+     https://<your-domain>/api/cron/reminders?secret=<CRON_SECRET>
+     ```
+     Once daily is enough (the checks are safe to call more than once
+     without double-notifying, but there's no need to call more often
+     than the conditions they check actually change).
+
+     **If you're staying on Vercel instead of moving hosts**: this same
+     endpoint is the answer there too. `vercel.json` in this repo
+     already configures Vercel's own native Cron Jobs to call it daily
+     — just set `CRON_SECRET` as an environment variable in the Vercel
+     dashboard and Vercel handles the rest automatically (it sends the
+     secret as a standard `Authorization: Bearer` header with zero
+     extra config). No external cron service needed on Vercel
+     specifically.
+
+3. **Build and start commands** are the same either way --
+   `npm run build` then `npm start` (which is `next start`, already
+   reads the `PORT` your host assigns automatically). No custom server
+   file needed for this path.
+
+4. **Database and Redis** are unchanged -- same Supabase and Upstash
+   setup as the Railway path, since those are separate services
+   regardless of where the app itself runs.
+
 ## 6. What "done" looks like
 
 - `https://<your-domain>/api/health` returns `{"status":"ok", ...}` with
   both `database: "connected"` and `redis: "connected"`.
 - Logging into the app and submitting a daily log actually sends the
   assignment/notification emails (confirms the worker service is
-  running and connected to the same Redis as web).
+  running and connected to the same Redis as web -- or, on the shared
+  hosting path, confirms Resend is configured correctly, since that
+  path doesn't depend on a worker for this specific email type).
 
 ## What this guide deliberately doesn't cover
 

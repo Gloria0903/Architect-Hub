@@ -23,7 +23,19 @@ const nextConfig = {
   // set automatically by Vercel's build environment, so this correctly
   // targets each platform's own expectations without needing a manual
   // toggle.
-  ...(process.env.VERCEL ? {} : { output: "standalone" }),
+  // "standalone" output is what the Dockerfile (Railway/self-hosted
+  // path) needs. Vercel doesn't want it (see comment above). Shared
+  // hosting environments with a managed Node.js app runner (e.g.
+  // HostAfrica's DirectAdmin Node.js Selector) generally expect a plain
+  // `next start` too -- standalone mode's server.js needs the static
+  // assets and public folder manually copied alongside it (that's what
+  // the Dockerfile's explicit COPY steps do), which most managed
+  // Node.js hosting panels have no built-in way to do. Set
+  // DISABLE_STANDALONE_BUILD=true on that kind of host to get a normal
+  // build instead.
+  ...(process.env.VERCEL || process.env.DISABLE_STANDALONE_BUILD === "true"
+    ? {}
+    : { output: "standalone" }),
   experimental: { serverActions: { allowedOrigins: ["localhost:3000"] } },
   async headers() {
     if (!isProd) return []; // don't apply CSP/HSTS in dev — breaks HMR/Fast Refresh

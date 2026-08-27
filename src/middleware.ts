@@ -89,6 +89,10 @@ export default auth((req) => {
     // unauthenticated by design; PATCH still enforces its own auth + admin
     // check inside the route handler, since this bypasses the session gate.
     "/api/settings/firm",
+    // Triggered by an external cron service (no session cookie at all) --
+    // protected by its own CRON_SECRET check inside the route handler
+    // instead of a login session. See src/app/api/cron/reminders/route.ts.
+    "/api/cron/",
   ];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
