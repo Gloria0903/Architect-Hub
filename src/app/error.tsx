@@ -39,7 +39,7 @@ export default function Error({
         </h1>
 
         <p className="mt-1.5 text-[12.5px] text-muted">
-          That's on us, not you. Your work up to this point is safe — try
+          That&apos;s on us, not you. Your work up to this point is safe — try
           again, and if it keeps happening, let your admin know.
         </p>
 
