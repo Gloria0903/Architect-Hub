@@ -128,7 +128,7 @@ export default function ClientCommsPage() {
               </Select>
             </Field>
             <Field label="Client / author name">
-              <input className="w-full border border-line rounded-md px-3 py-2 text-[13px] bg-white outline-none focus:border-blueprint" value={form.author} onChange={e => setForm(f=>({...f,author:e.target.value}))} placeholder="e.g. James Mwangi" />
+              <input className="w-full border border-line rounded-md px-3 py-2 text-[13px] bg-surface text-ink outline-none focus:border-blueprint" value={form.author} onChange={e => setForm(f=>({...f,author:e.target.value}))} placeholder="e.g. James Mwangi" />
             </Field>
             <Field label="Comment" required>
               <Textarea required rows={4} value={form.content} onChange={e => setForm(f=>({...f,content:e.target.value}))} placeholder="Enter the client's comment, instruction, or feedback…" />

@@ -96,7 +96,7 @@ function LoginContent() {
                   autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full border border-line rounded-md px-3 py-2 text-[13px] outline-none focus:border-blueprint bg-white"
+                  className="w-full border border-line rounded-md px-3 py-2 text-[13px] outline-none focus:border-blueprint bg-surface text-ink"
                 />
               </div>
               <div>
@@ -107,7 +107,7 @@ function LoginContent() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full border border-line rounded-md px-3 py-2 text-[13px] outline-none focus:border-blueprint bg-white"
+                  className="w-full border border-line rounded-md px-3 py-2 text-[13px] outline-none focus:border-blueprint bg-surface text-ink"
                 />
               </div>
               <div className="flex items-center justify-between">
@@ -144,7 +144,7 @@ function LoginContent() {
                     maxLength={1}
                     value={digit}
                     onChange={(e) => handleMfaInput(e.target.value, i)}
-                    className="w-full aspect-square text-center border border-line rounded-md text-[16px] font-mono outline-none focus:border-blueprint bg-white"
+                    className="w-full aspect-square text-center border border-line rounded-md text-[16px] font-mono outline-none focus:border-blueprint bg-surface text-ink"
                   />
                 ))}
               </div>

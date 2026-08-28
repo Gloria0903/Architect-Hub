@@ -1,7 +1,7 @@
 import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
-const base = "w-full border border-line rounded-md px-3 py-2 text-[13px] bg-white outline-none focus:border-blueprint focus:ring-1 focus:ring-blueprint transition-colors";
+const base = "w-full border border-line rounded-md px-3 py-2 text-[13px] bg-surface text-ink outline-none focus:border-blueprint focus:ring-1 focus:ring-blueprint transition-colors";
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(base, className)} {...props} />;

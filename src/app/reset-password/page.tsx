@@ -80,7 +80,7 @@ function ResetPasswordContent() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full border border-line rounded-md px-3 py-2 text-[13px] outline-none focus:border-blueprint bg-white"
+                  className="w-full border border-line rounded-md px-3 py-2 text-[13px] outline-none focus:border-blueprint bg-surface text-ink"
                 />
               </div>
               <div>
@@ -90,7 +90,7 @@ function ResetPasswordContent() {
                   required
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
-                  className="w-full border border-line rounded-md px-3 py-2 text-[13px] outline-none focus:border-blueprint bg-white"
+                  className="w-full border border-line rounded-md px-3 py-2 text-[13px] outline-none focus:border-blueprint bg-surface text-ink"
                 />
               </div>
               {error && <p className="text-brick text-[12px]">{error}</p>}

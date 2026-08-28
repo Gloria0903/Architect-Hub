@@ -20,7 +20,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             type="button"
             onClick={() => setMobileNavOpen(true)}
             aria-label="Open menu"
-            className="lg:hidden text-muted hover:text-ink p-1.5 -ml-1.5 rounded-md hover:bg-white/60"
+            className="lg:hidden text-muted hover:text-ink p-1.5 -ml-1.5 rounded-md hover:bg-vellum"
           >
             <Menu size={20} />
           </button>
