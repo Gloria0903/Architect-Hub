@@ -106,10 +106,45 @@ auto-deploy picking up the same commit.
 ## Alternative: HostPinnacle shared hosting (cPanel, Node.js App)
 
 Confirmed with HostPinnacle support directly (not guessed): Node.js 22
-supported, SSH available on request, cron jobs supported, Postgres port
-5432 reachable. **Not** supported on shared plans: a second persistent
-process, or Redis (their support explicitly recommends VPS for that).
-This app has been engineered to not strictly need either -- see below.
+supported, SSH available on request, cron jobs supported. **Not**
+supported on shared plans, confirmed directly by their support after
+hands-on testing: outbound PostgreSQL connections at all (both port
+5432 and 6543 are refused -- a blanket policy on shared hosting, not a
+per-account restriction), a second persistent process, or Redis. This
+app has been engineered to not strictly need the last two -- see
+below. The database restriction needed an actual architecture change,
+covered here.
+
+### 0. Database: Neon instead of Supabase, via the serverless driver
+
+Raw Postgres is blocked outbound on shared hosting, full stop -- no
+support ticket fixes that, it's policy. The app now uses Neon's
+serverless driver adapter (`src/lib/prisma.ts`) instead of a raw TCP
+connection: it queries the database over WSS (WebSocket Secure), which
+rides the same port 443 as ordinary HTTPS traffic, so it gets through
+where a raw Postgres connection can't.
+
+1. Create a free project at [neon.tech](https://neon.tech)
+2. Neon dashboard → **Connect** → copy both:
+   - The **pooled** connection string (has `-pooler` in the hostname)
+     → this is your `DATABASE_URL`
+   - The **direct** connection string (no `-pooler`) → this is your
+     `DIRECT_URL`
+3. **Important limitation, not obvious from the code alone:**
+   `prisma migrate deploy` always uses a raw, direct TCP connection for
+   schema operations -- that's a Prisma CLI limitation, the driver
+   adapter above only changes how the *running app* queries data, not
+   how migrations run. This means **migrations can never run from the
+   HostPinnacle server itself** -- run `npx prisma migrate deploy`
+   from your own machine instead (pointed at Neon's `DIRECT_URL`), or
+   from GitHub Actions (see the deploy pipeline below). Do this once,
+   from your local machine, before the app on HostPinnacle can serve
+   any real data:
+   ```powershell
+   $env:DATABASE_URL = "<Neon pooled connection string>"
+   $env:DIRECT_URL = "<Neon direct connection string>"
+   npx prisma migrate deploy
+   ```
 
 ### 1. Request SSH access
 
@@ -133,8 +168,10 @@ Set these via cPanel's Node.js App interface (or a `.env` file in the
 application root, per their support's answer):
 
 ```
-DATABASE_URL=<Supabase pooled connection string>
-DIRECT_URL=<Supabase direct connection string>
+DATABASE_URL=<Neon POOLED connection string>
+DIRECT_URL=<Neon DIRECT connection string -- unused at runtime on this
+            host specifically, since migrations can't run here, but
+            still required by schema.prisma>
 AUTH_SECRET=<generate as in step 3 of the Railway section above>
 NEXTAUTH_URL=https://your-domain
 NEXT_PUBLIC_APP_URL=https://your-domain
@@ -168,16 +205,20 @@ cd architect-hub
 # create your .env file here with the variables from step 3
 npm install
 npx prisma generate
-npx prisma migrate deploy
 npm run build
 ```
-Then start the app from cPanel's Node.js App interface (it manages the
-running process for you from here).
+Note: no `npx prisma migrate deploy` here -- that already ran from
+your local machine in step 0, and can't run from this server anyway
+(the same blocked-TCP-port limitation applies to migrations run from
+here as to the app's old direct connection). Then start the app from
+cPanel's Node.js App interface (it manages the running process for
+you from here).
 
 ### 5. Scheduled reminders via cron
 
 cPanel → **Cron Jobs** → add a job (once daily is enough) running:
 ```bash
+
 curl "https://your-domain/api/cron/reminders?secret=<CRON_SECRET>"
 ```
 

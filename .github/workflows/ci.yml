@@ -181,6 +181,10 @@ jobs:
   #   HOSTPINNACLE_APP_PATH  -- the app's root directory on the server,
   #                             e.g. architect-hub (relative to your home
   #                             directory)
+  #   NEON_DIRECT_URL        -- Neon's direct (unpooled) connection
+  #                             string -- used ONLY here, to apply
+  #                             migrations from GitHub's own runner
+  #                             before the SSH step restarts the app
   #
   # touch tmp/restart.txt is the official Phusion Passenger mechanism
   # (what cPanel's Node.js Selector runs on) for triggering a restart
@@ -193,6 +197,24 @@ jobs:
   #   needs: build
   #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
   #   steps:
+  #     # Migrations run HERE, on GitHub's own runner -- NOT via the SSH
+  #     # step below. prisma migrate deploy always needs a raw TCP
+  #     # connection, which HostPinnacle's shared hosting blocks outbound
+  #     # entirely (confirmed directly by their support) -- running it
+  #     # over SSH on their server would fail the same way a direct
+  #     # connection from the app used to. GitHub's runners have no such
+  #     # restriction, so migrations happen here, then the SSH step only
+  #     # pulls code and restarts the already-migrated app.
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 22
+  #         cache: "npm"
+  #     - run: npm ci
+  #     - run: npx prisma migrate deploy
+  #       env:
+  #         DATABASE_URL: ${{ secrets.NEON_DIRECT_URL }}
+  #         DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
   #     - uses: webfactory/ssh-agent@v0.9.0
   #       with:
   #         ssh-private-key: ${{ secrets.HOSTPINNACLE_SSH_KEY }}
@@ -203,6 +225,5 @@ jobs:
   #            git pull origin main && \
   #            npm install && \
   #            npx prisma generate && \
-  #            npx prisma migrate deploy && \
   #            npm run build && \
   #            touch tmp/restart.txt"

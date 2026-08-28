@@ -2,24 +2,25 @@
   "name": "architect-hub",
   "version": "0.1.0",
   "private": true,
- "scripts": {
-  "dev": "next dev",
-  "build": "next build",
-  "start": "next start",
-  "lint": "eslint .",
-  "postinstall": "prisma generate",
-  "db:generate": "prisma generate",
-  "db:push": "prisma db push",
-  "db:migrate": "prisma migrate dev",
-  "db:studio": "prisma studio",
-  "worker": "tsx --env-file=.env src/worker.ts",
-  "test": "vitest run",
-  "test:watch": "vitest"
-},
-
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "postinstall": "prisma generate",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "worker": "tsx --env-file=.env src/worker.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1106.0",
     "@aws-sdk/s3-request-presigner": "^3.1106.0",
+    "@neondatabase/serverless": "0.10.4",
+    "@prisma/adapter-neon": "5.22.0",
     "@prisma/client": "^5.22.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-popover": "^1.1.23",
@@ -40,6 +41,7 @@
     "react-dom": "^18.3.1",
     "resend": "^4.0.0",
     "tailwind-merge": "^2.5.4",
+    "ws": "8.21.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {

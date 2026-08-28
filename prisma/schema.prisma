@@ -1,5 +1,14 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Required for the Neon serverless driver adapter (src/lib/prisma.ts)
+  // -- lets Prisma talk to the database over HTTP/WebSocket instead of
+  // a raw TCP connection. This is what makes the app work on hosting
+  // that blocks outbound Postgres ports (5432/6543) but allows normal
+  // HTTPS/WSS traffic on 443, like HostPinnacle's shared hosting.
+  // GA (no longer "preview") from Prisma ORM 6.16.0 -- still a preview
+  // feature on this app's current 5.22.0, which is why this flag is
+  // here explicitly rather than just working by default.
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
