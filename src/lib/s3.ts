@@ -15,35 +15,48 @@ for (const key of REQUIRED_ENV) {
   }
 }
 
-const AWS_REGION = process.env.AWS_REGION;
-const BUCKET = process.env.AWS_S3_BUCKET;
-
-if (!AWS_REGION) {
-  throw new Error("AWS_REGION is not configured.");
+// Lazy initialization helpers to prevent throwing errors at build time
+function getBucket(): string {
+  const bucket = process.env.AWS_S3_BUCKET;
+  if (!bucket) {
+    throw new Error("AWS_S3_BUCKET is not configured.");
+  }
+  return bucket;
 }
 
-if (!BUCKET) {
-  throw new Error("AWS_S3_BUCKET is not configured.");
+let s3Instance: S3Client | null = null;
+
+function getS3Client(): S3Client {
+  if (s3Instance) return s3Instance;
+
+  const region = process.env.AWS_REGION;
+  if (!region) {
+    throw new Error("AWS_REGION is not configured.");
+  }
+
+  s3Instance = new S3Client({
+    region,
+    credentials:
+      process.env.AWS_ACCESS_KEY_ID &&
+      process.env.AWS_SECRET_ACCESS_KEY
+        ? {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+          }
+        : undefined,
+  });
+
+  return s3Instance;
 }
 
 /**
- * AWS S3 client.
- *
- * If explicit AWS credentials are provided, they are used.
- * Otherwise, AWS SDK falls back to its default credential provider chain
- * such as IAM roles in production.
+ * Proxy object export for backwards compatibility with `s3.send()`
  */
-export const s3 = new S3Client({
-  region: AWS_REGION,
-
-  credentials:
-    process.env.AWS_ACCESS_KEY_ID &&
-    process.env.AWS_SECRET_ACCESS_KEY
-      ? {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        }
-      : undefined,
+export const s3 = new Proxy({} as S3Client, {
+  get(_target, prop) {const client = getS3Client();
+    const value = Reflect.get(client, prop);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
 });
 
 const PRESIGN_EXPIRY_SECONDS = 300; // 5 minutes
@@ -74,14 +87,14 @@ export async function getUploadUrl(params: {
   contentLength: number;
 }): Promise<string> {
   const command = new PutObjectCommand({
-    Bucket: BUCKET,
+    Bucket: getBucket(),
     Key: params.key,
     ContentType: params.contentType,
     ContentLength: params.contentLength,
     ServerSideEncryption: "AES256",
   });
 
-  return getSignedUrl(s3, command, {
+  return getSignedUrl(getS3Client(), command, {
     expiresIn: PRESIGN_EXPIRY_SECONDS,
   });
 }
@@ -94,7 +107,7 @@ export async function getDownloadUrl(
   downloadFileName?: string
 ): Promise<string> {
   const command = new GetObjectCommand({
-    Bucket: BUCKET,
+    Bucket: getBucket(),
     Key: key,
 
     ...(downloadFileName
@@ -104,7 +117,7 @@ export async function getDownloadUrl(
       : {}),
   });
 
-  return getSignedUrl(s3, command, {
+  return getSignedUrl(getS3Client(), command, {
     expiresIn: PRESIGN_EXPIRY_SECONDS,
   });
 }
@@ -113,9 +126,9 @@ export async function getDownloadUrl(
  * Deletes an object from S3.
  */
 export async function deleteObject(key: string): Promise<void> {
-  await s3.send(
+  await getS3Client().send(
     new DeleteObjectCommand({
-      Bucket: BUCKET,
+      Bucket: getBucket(),
       Key: key,
     })
   );
@@ -136,9 +149,9 @@ export async function putObjectBuffer(
     throw new Error(`Cannot upload empty buffer to S3: ${key}`);
   }
 
-  await s3.send(
+  await getS3Client().send(
     new PutObjectCommand({
-      Bucket: BUCKET,
+      Bucket: getBucket(),
       Key: key,
       Body: buffer,
       ContentType: contentType || "application/octet-stream",
@@ -157,9 +170,9 @@ export async function putObjectBuffer(
 export async function getObjectBuffer(
   key: string
 ): Promise<Buffer> {
-  const result = await s3.send(
+  const result = await getS3Client().send(
     new GetObjectCommand({
-      Bucket: BUCKET,
+      Bucket: getBucket(),
       Key: key,
     })
   );
