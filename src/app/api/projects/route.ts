@@ -796,7 +796,7 @@ export async function POST(req: NextRequest) {
   // above avoided doing as one nested-select query. Run in parallel
   // since they're independent of each other.
 
-  const [client, architect, supervisor] = await Promise.all([
+  const [responseClient, responseArchitect, responseSupervisor] = await Promise.all([
     prisma.client.findUnique({
       where: { id: project.clientId },
       select: {
@@ -827,7 +827,7 @@ export async function POST(req: NextRequest) {
   ]);
 
   return NextResponse.json(
-    { ...project, client, architect, supervisor },
+    { ...project, client: responseClient, architect: responseArchitect, supervisor: responseSupervisor },
     {
       status: 201,
     }

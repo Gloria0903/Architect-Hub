@@ -55,9 +55,28 @@ export async function GET(req: NextRequest) {
         };
 
   try {
+    /*
+     * Same fix as /api/payments GET: converts the relational
+     * project-access filter into a flat list of allowed project IDs
+     * first, instead of `where: { project: projectWhere }` (a join).
+     * On HostPinnacle, queries involving relation joins -- whether in
+     * a select OR a where clause -- fail with "Connection terminated
+     * unexpectedly"; a plain `projectId: { in: [...] }` filter avoids
+     * the join entirely.
+     */
+    let projectIdFilter: string[] | undefined;
+
+    if (projectWhere !== undefined) {
+      const accessibleProjects = await prisma.project.findMany({
+        where: projectWhere,
+        select: { id: true },
+      });
+      projectIdFilter = accessibleProjects.map((p) => p.id);
+    }
+
     const invoices = await prisma.invoice.findMany({
       where: {
-        ...(projectWhere ? { project: projectWhere } : {}),
+        ...(projectIdFilter ? { projectId: { in: projectIdFilter } } : {}),
       },
       select: {
         id: true,
@@ -68,24 +87,34 @@ export async function GET(req: NextRequest) {
         createdAt: true,
         projectId: true,
         recordedById: true,
-        project: {
-          select: {
-            id: true,
-            name: true,
-            sheetNo: true,
-            budget: true,
-            invoiced: true,
-            paid: true,
-          },
-        },
-        recordedBy: {
-          select: { id: true, name: true },
-        },
       },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
 
-    return NextResponse.json(invoices);
+    const invoiceProjectIds = [...new Set(invoices.map((i) => i.projectId))];
+    const recorderIds = [...new Set(invoices.map((i) => i.recordedById))];
+
+    const [relatedProjects, recorders] = await Promise.all([
+      prisma.project.findMany({
+        where: { id: { in: invoiceProjectIds } },
+        select: { id: true, name: true, sheetNo: true, budget: true, invoiced: true, paid: true },
+      }),
+      prisma.user.findMany({
+        where: { id: { in: recorderIds } },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    const projectById = new Map(relatedProjects.map((p) => [p.id, p]));
+    const recorderById = new Map(recorders.map((u) => [u.id, u]));
+
+    const invoicesWithRelations = invoices.map((invoice) => ({
+      ...invoice,
+      project: projectById.get(invoice.projectId) ?? null,
+      recordedBy: recorderById.get(invoice.recordedById) ?? null,
+    }));
+
+    return NextResponse.json(invoicesWithRelations);
   } catch (error) {
     console.error("Failed to fetch invoices:", error);
     return NextResponse.json(

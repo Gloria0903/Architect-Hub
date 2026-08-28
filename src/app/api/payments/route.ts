@@ -164,15 +164,31 @@ export async function GET(
    */
 
   try {
+    /*
+     * Converts the relational project-access filter into a flat list
+     * of allowed project IDs first, instead of filtering payments via
+     * `where: { project: projectWhere }` directly (a join). On
+     * HostPinnacle, queries involving relation joins -- whether in a
+     * select OR a where clause -- fail with "Connection terminated
+     * unexpectedly"; a plain `projectId: { in: [...] }` filter avoids
+     * the join entirely. When projectWhere is undefined (admin, no
+     * specific project requested), there's nothing to restrict, so
+     * this step is skipped.
+     */
+    let projectIdFilter: string[] | undefined;
+
+    if (projectWhere !== undefined) {
+      const accessibleProjects = await prisma.project.findMany({
+        where: projectWhere,
+        select: { id: true },
+      });
+      projectIdFilter = accessibleProjects.map((p) => p.id);
+    }
+
     const payments =
       await prisma.payment.findMany({
         where: {
-          ...(projectWhere
-            ? {
-                project:
-                  projectWhere,
-              }
-            : {}),
+          ...(projectIdFilter ? { projectId: { in: projectIdFilter } } : {}),
         },
 
         select: {
@@ -191,30 +207,6 @@ export async function GET(
           projectId: true,
 
           recordedById: true,
-
-          project: {
-            select: {
-              id: true,
-              name: true,
-              sheetNo: true,
-
-              /*
-               * These values are returned for reconciliation.
-               *
-               * The actual payment amount comes from Payment.amount.
-               */
-              budget: true,
-              invoiced: true,
-              paid: true,
-            },
-          },
-
-          recordedBy: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
         },
 
         orderBy: [
@@ -228,13 +220,42 @@ export async function GET(
       });
 
     /*
+     * Same batched-flat-lookup pattern as /api/projects: fetch the
+     * related projects and users as separate flat queries instead of
+     * nested relation selects, then stitch back into the exact same
+     * response shape as before.
+     */
+    const paymentProjectIds = [...new Set(payments.map((p) => p.projectId))];
+    const recorderIds = [...new Set(payments.map((p) => p.recordedById))];
+
+    const [relatedProjects, recorders] = await Promise.all([
+      prisma.project.findMany({
+        where: { id: { in: paymentProjectIds } },
+        select: { id: true, name: true, sheetNo: true, budget: true, invoiced: true, paid: true },
+      }),
+      prisma.user.findMany({
+        where: { id: { in: recorderIds } },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    const projectById = new Map(relatedProjects.map((p) => [p.id, p]));
+    const recorderById = new Map(recorders.map((u) => [u.id, u]));
+
+    const paymentsWithRelations = payments.map((payment) => ({
+      ...payment,
+      project: projectById.get(payment.projectId) ?? null,
+      recordedBy: recorderById.get(payment.recordedById) ?? null,
+    }));
+
+    /*
      * ---------------------------------------------------------------
      * Return payment records
      * ---------------------------------------------------------------
      */
 
     return NextResponse.json(
-      payments
+      paymentsWithRelations
     );
   } catch (error) {
     console.error(
@@ -702,25 +723,6 @@ export async function POST(
                 projectId: true,
 
                 recordedById: true,
-
-                project: {
-                  select: {
-                    id: true,
-                    name: true,
-                    sheetNo: true,
-
-                    budget: true,
-                    invoiced: true,
-                    paid: true,
-                  },
-                },
-
-                recordedBy: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
               },
             });
 
@@ -748,6 +750,8 @@ export async function POST(
 
               select: {
                 id: true,
+                name: true,
+                sheetNo: true,
 
                 budget: true,
                 invoiced: true,
@@ -866,7 +870,7 @@ export async function POST(
                   .id,
 
               projectName:
-                `${result.payment.project.name} (${result.payment.project.sheetNo})`,
+                `${result.updatedProject.name} (${result.updatedProject.sheetNo})`,
 
               amount,
 
@@ -892,6 +896,20 @@ export async function POST(
     return NextResponse.json(
       {
         ...result.payment,
+
+        project: {
+          id: result.updatedProject.id,
+          name: result.updatedProject.name,
+          sheetNo: result.updatedProject.sheetNo,
+          budget: newBudget,
+          invoiced: newInvoiced,
+          paid: newPaid,
+        },
+
+        recordedBy: {
+          id: session.user.id,
+          name: session.user.name,
+        },
 
         financialSummary: {
           budget:
