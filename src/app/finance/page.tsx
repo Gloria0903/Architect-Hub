@@ -537,7 +537,7 @@ export default function FinancePage() {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90"
+            className="flex items-center gap-1.5 bg-ink-solid text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink-solid/90"
           >
             <Plus size={15} />
             Record payment

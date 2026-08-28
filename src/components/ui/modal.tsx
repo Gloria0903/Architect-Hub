@@ -14,7 +14,7 @@ interface ModalProps {
 export function Modal({ open, onClose, title, subtitle, children, maxWidth = "max-w-lg" }: ModalProps) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-solid/40 backdrop-blur-sm">
       <div className={`bg-surface rounded-card w-full ${maxWidth} max-h-[90vh] overflow-y-auto shadow-xl`}>
         <div className="flex items-start justify-between p-5 border-b border-line">
           <div>

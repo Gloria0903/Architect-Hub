@@ -114,7 +114,7 @@ export default function StaffPage() {
             <h1 className="font-display font-bold text-[20px] text-ink">Staff</h1>
             <p className="text-muted text-[12px] mt-0.5">{staff.length} team {staff.length === 1 ? "member" : "members"}</p>
           </div>
-          <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90">
+          <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 bg-ink-solid text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink-solid/90">
             <Plus size={15} />Add staff member
           </button>
         </div>
@@ -202,7 +202,7 @@ export default function StaffPage() {
             {createError && <p className="text-brick text-[12px] -mt-1">{createError}</p>}
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => { setCreateOpen(false); resetForm(); }} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
-              <button type="submit" disabled={creating} className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed">{creating ? "Adding…" : "Add member"}</button>
+              <button type="submit" disabled={creating} className="px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed">{creating ? "Adding…" : "Add member"}</button>
             </div>
           </form>
         </Modal>
@@ -229,7 +229,7 @@ export default function StaffPage() {
             <p className="text-[11px] text-muted -mt-2">To generate a fresh temporary password instead, use the shield icon on their card and cancel this dialog.</p>
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => { setEditTarget(null); resetForm(); }} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
-              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Save changes</button>
+              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium">Save changes</button>
             </div>
           </form>
         </Modal>
@@ -246,7 +246,7 @@ export default function StaffPage() {
             <button
               type="button"
               onClick={() => setTempPasswordNotice(null)}
-              className="self-end px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium"
+              className="self-end px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium"
             >
               Done
             </button>
@@ -266,7 +266,7 @@ export default function StaffPage() {
             <button
               type="button"
               onClick={() => setInvitedNotice(null)}
-              className="self-end px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium"
+              className="self-end px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium"
             >
               Done
             </button>

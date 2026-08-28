@@ -47,7 +47,7 @@ const [expandedId, setExpandedId] = useState<string | null>(null);
           </div>
           <div className="flex items-center gap-2">
           <RefreshButton />
-          <Link href="/daily-logs/new" className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90">
+          <Link href="/daily-logs/new" className="flex items-center gap-1.5 bg-ink-solid text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink-solid/90">
             <Plus size={15} />Submit log
           </Link>
           </div>

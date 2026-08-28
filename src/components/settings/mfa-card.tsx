@@ -164,7 +164,7 @@ export function MfaSettingsCard() {
             <button
               onClick={startEnroll}
               disabled={busy}
-              className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium disabled:opacity-60"
+              className="px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium disabled:opacity-60"
             >
               {busy ? "Setting up…" : "Set up two-factor authentication"}
             </button>
@@ -194,7 +194,7 @@ export function MfaSettingsCard() {
             <button
               onClick={confirmEnroll}
               disabled={busy || code.join("").length !== 6}
-              className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium disabled:opacity-60"
+              className="px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium disabled:opacity-60"
             >
               {busy ? "Verifying…" : "Confirm and enable"}
             </button>

@@ -43,7 +43,7 @@ export default function ClientCommsPage() {
             <h1 className="font-display font-bold text-[20px] text-ink">Client communications</h1>
             <p className="text-muted text-[12px] mt-0.5">{comments.filter(c=>!c.resolvedAt).length} unresolved · {comments.length} total</p>
           </div>
-          <button onClick={() => setAddOpen(true)} className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90">
+          <button onClick={() => setAddOpen(true)} className="flex items-center gap-1.5 bg-ink-solid text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink-solid/90">
             <MessageCircle size={15} />Log comment
           </button>
         </div>
@@ -135,7 +135,7 @@ export default function ClientCommsPage() {
             </Field>
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => setAddOpen(false)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
-              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Log comment</button>
+              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium">Log comment</button>
             </div>
           </form>
         </Modal>

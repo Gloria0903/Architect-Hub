@@ -181,7 +181,7 @@ export default function NewDailyLogPage() {
               <button
                 type="button"
                 onClick={finish}
-                className="rounded-md bg-ink px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink/90"
+                className="rounded-md bg-ink-solid px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink-solid/90"
               >
                 {attachedCount > 0 ? "Done" : "Skip — no attachments"}
               </button>
@@ -409,7 +409,7 @@ export default function NewDailyLogPage() {
                   workCompletedLength <
                     MIN_WORK_DESCRIPTION_LENGTH
                 }
-                className="rounded-md bg-ink px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink/90 disabled:opacity-60"
+                className="rounded-md bg-ink-solid px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink-solid/90 disabled:opacity-60"
               >
                 {submitting
                   ? "Submitting…"

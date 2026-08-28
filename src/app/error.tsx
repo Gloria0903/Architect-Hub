@@ -46,7 +46,7 @@ export default function Error({
         <button
           type="button"
           onClick={reset}
-          className="mx-auto mt-4 flex items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink/90"
+          className="mx-auto mt-4 flex items-center gap-1.5 rounded-md bg-ink-solid px-4 py-2 text-[12.5px] font-medium text-white hover:bg-ink-solid/90"
         >
           <RotateCw size={13} />
           Try again

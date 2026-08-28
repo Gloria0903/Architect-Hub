@@ -99,7 +99,7 @@ export default function ProjectsPage() {
               </Link>
             )}
             {canCreate && (
-              <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90">
+              <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 bg-ink-solid text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink-solid/90">
                 <Plus size={15} />New project
               </button>
             )}
@@ -109,7 +109,7 @@ export default function ProjectsPage() {
         <div className="flex items-center gap-1.5 mb-4 flex-wrap">
           {filters.map(f => (
             <button key={f.value} onClick={() => setFilter(f.value)}
-              className={`px-3 py-1.5 rounded-md text-[12px] border transition-colors ${filter === f.value ? "bg-ink text-white border-ink" : "bg-surface text-muted border-line hover:border-muted"}`}>
+              className={`px-3 py-1.5 rounded-md text-[12px] border transition-colors ${filter === f.value ? "bg-ink-solid text-white border-ink" : "bg-surface text-muted border-line hover:border-muted"}`}>
               {f.label}
             </button>
           ))}
@@ -222,7 +222,7 @@ export default function ProjectsPage() {
             {createError && <p className="text-brick text-[12px]">{createError}</p>}
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => setCreateOpen(false)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
-              <button type="submit" disabled={creating} className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed">{creating ? "Creating…" : "Create project"}</button>
+              <button type="submit" disabled={creating} className="px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed">{creating ? "Creating…" : "Create project"}</button>
             </div>
           </form>
         </Modal>

@@ -259,7 +259,7 @@ export default function ClientsPage() {
                   setForm(emptyForm);
                   setOpen(true);
                 }}
-                className="flex items-center gap-1.5 bg-ink text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink/90"
+                className="flex items-center gap-1.5 bg-ink-solid text-white rounded-md px-3.5 py-2 text-[12.5px] font-medium hover:bg-ink-solid/90"
               >
                 <Plus size={15} />
                 Add client
@@ -622,7 +622,7 @@ export default function ClientsPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium disabled:opacity-50"
+                className="px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium disabled:opacity-50"
               >
                 {submitting
                   ? "Adding..."
@@ -760,7 +760,7 @@ export default function ClientsPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium disabled:opacity-50"
+                className="px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium disabled:opacity-50"
               >
                 {submitting
                   ? "Saving..."
