@@ -20,7 +20,6 @@ module.exports = {
         ink: {
           DEFAULT: "rgb(var(--color-ink) / <alpha-value>)",
           sidebar: "rgb(var(--color-ink-sidebar) / <alpha-value>)",
-          solid: "rgb(var(--color-ink-solid) / <alpha-value>)",
         },
         muted: "rgb(var(--color-muted) / <alpha-value>)",
         blueprint: {

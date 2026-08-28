@@ -93,7 +93,7 @@ export function ProfileMenu() {
                     aria-pressed={theme === value}
                     className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-medium transition-colors ${
                       theme === value
-                        ? "bg-ink-solid text-surface"
+                        ? "bg-ink text-surface"
                         : "text-muted hover:bg-vellum"
                     }`}
                   >

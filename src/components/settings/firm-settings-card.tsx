@@ -90,7 +90,7 @@ export function FirmSettingsCard() {
           {error && <p className="text-brick text-[12px]">{error}</p>}
           <div className="flex items-center justify-end gap-3 pt-1 border-t border-line">
             {saved && <span className="flex items-center gap-1 text-moss text-[12px]"><CheckCircle size={13} />Saved</span>}
-            <button type="submit" disabled={saving} className="px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium disabled:opacity-50">
+            <button type="submit" disabled={saving} className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium disabled:opacity-50">
               {saving ? "Saving…" : "Save changes"}
             </button>
           </div>

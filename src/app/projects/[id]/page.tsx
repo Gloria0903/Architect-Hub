@@ -440,7 +440,7 @@ const outstandingPercentage =
               <Upload size={24} className="mx-auto text-muted mb-3" />
               <div className="text-ink font-medium text-[13px]">{uploading ? "Uploading…" : dragging ? "Drop files here" : "Drag and drop drawings or documents"}</div>
               <p className="text-muted text-[12px] mt-1">Supports DWG, DXF, Revit, PDF, images, BOQs, contracts and reports (up to 50MB).</p>
-              <button type="button" onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }} className="mt-3 bg-ink-solid text-white rounded-md px-4 py-2 text-[12px] font-medium">Browse files</button>
+              <button type="button" onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }} className="mt-3 bg-ink text-white rounded-md px-4 py-2 text-[12px] font-medium">Browse files</button>
             </Card>
             {uploadError && <p className="text-brick text-[12px]">{uploadError}</p>}
 
@@ -737,7 +737,7 @@ const outstandingPercentage =
 </div>
             <div className="flex justify-end gap-2 pt-1 border-t border-line mt-1">
               <button type="button" onClick={() => setEditOpen(false)} className="px-4 py-2 rounded-md text-[12.5px] border border-line text-muted">Cancel</button>
-              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink-solid text-white font-medium">Save changes</button>
+              <button type="submit" className="px-4 py-2 rounded-md text-[12.5px] bg-ink text-white font-medium">Save changes</button>
             </div>
           </form>
         </Modal>

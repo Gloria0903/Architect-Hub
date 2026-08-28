@@ -93,6 +93,12 @@ export default auth((req) => {
     // protected by its own CRON_SECRET check inside the route handler
     // instead of a login session. See src/app/api/cron/reminders/route.ts.
     "/api/cron/",
+    // Meant to work without a session -- load balancers, uptime
+    // monitors, and manual diagnostics all need this to respond
+    // without logging in first. The route itself already has no auth
+    // check (see src/app/api/health/route.ts), but without this entry
+    // the session gate below was blocking it before it ever got there.
+    "/api/health",
   ];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
