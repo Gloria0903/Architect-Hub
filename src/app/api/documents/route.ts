@@ -30,6 +30,29 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
 
+  /*
+   * Same flat-query fix as /api/projects, /api/logs, /api/payments,
+   * /api/invoices: relational where filters and nested includes both
+   * fail with "Connection terminated unexpectedly" on this app's
+   * hosting. Non-admin project access is resolved to a flat list of
+   * project IDs first, instead of `where: { project: { OR: [...] } }`
+   * (a join).
+   */
+  let accessibleProjectIds: string[] | undefined;
+
+  if (!isAdmin(session)) {
+    const accessibleProjects = await prisma.project.findMany({
+      where: {
+        OR: [
+          { architectId: session.user.id },
+          { supervisorId: session.user.id },
+        ],
+      },
+      select: { id: true },
+    });
+    accessibleProjectIds = accessibleProjects.map((p) => p.id);
+  }
+
   const documents = await prisma.document.findMany({
     where: {
       ...(projectId && { projectId }),
@@ -37,37 +60,28 @@ export async function GET(req: NextRequest) {
       isLatest: true,
       deletedAt: null,
 
-      ...(!isAdmin(session) && {
-        project: {
-          OR: [
-            {
-              architectId: session.user.id,
-            },
-            {
-              supervisorId: session.user.id,
-            },
-          ],
-        },
-      }),
+      ...(accessibleProjectIds
+        ? { projectId: { in: accessibleProjectIds } }
+        : {}),
     },
 
-    include: {
-      project: {
-        select: {
-          id: true,
-          name: true,
-          sheetNo: true,
-        },
-      },
-
-      uploadedBy: {
-        select: {
-          id: true,
-          name: true,
-          initials: true,
-          avatarUrl: true,
-        },
-      },
+    select: {
+      id: true,
+      name: true,
+      fileKey: true,
+      fileUrl: true,
+      fileSize: true,
+      mimeType: true,
+      version: true,
+      uploadedAt: true,
+      category: true,
+      isLatest: true,
+      deletedAt: true,
+      clientVisible: true,
+      parentId: true,
+      dailyLogId: true,
+      projectId: true,
+      uploadedById: true,
     },
 
     orderBy: {
@@ -75,7 +89,30 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  return NextResponse.json(documents);
+  const docProjectIds = [...new Set(documents.map((d) => d.projectId))];
+  const uploaderIds = [...new Set(documents.map((d) => d.uploadedById))];
+
+  const [projects, uploaders] = await Promise.all([
+    prisma.project.findMany({
+      where: { id: { in: docProjectIds } },
+      select: { id: true, name: true, sheetNo: true },
+    }),
+    prisma.user.findMany({
+      where: { id: { in: uploaderIds } },
+      select: { id: true, name: true, initials: true, avatarUrl: true },
+    }),
+  ]);
+
+  const projectById = new Map(projects.map((p) => [p.id, p]));
+  const uploaderById = new Map(uploaders.map((u) => [u.id, u]));
+
+  const documentsWithRelations = documents.map((doc) => ({
+    ...doc,
+    project: projectById.get(doc.projectId) ?? null,
+    uploadedBy: uploaderById.get(doc.uploadedById) ?? null,
+  }));
+
+  return NextResponse.json(documentsWithRelations);
 }
 
 export async function POST(req: NextRequest) {
@@ -303,25 +340,6 @@ export async function POST(req: NextRequest) {
           dailyLogId:
             resolvedDailyLogId,
         },
-
-        include: {
-          project: {
-            select: {
-              id: true,
-              name: true,
-              sheetNo: true,
-            },
-          },
-
-          uploadedBy: {
-            select: {
-              id: true,
-              name: true,
-              initials: true,
-              avatarUrl: true,
-            },
-          },
-        },
       });
 
     /*
@@ -336,25 +354,6 @@ export async function POST(req: NextRequest) {
         data: {
           fileUrl:
             `/api/documents/${document.id}`,
-        },
-
-        include: {
-          project: {
-            select: {
-              id: true,
-              name: true,
-              sheetNo: true,
-            },
-          },
-
-          uploadedBy: {
-            select: {
-              id: true,
-              name: true,
-              initials: true,
-              avatarUrl: true,
-            },
-          },
         },
       });
 
@@ -391,8 +390,21 @@ export async function POST(req: NextRequest) {
       )
     );
 
+    const uploadedBy = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, name: true, initials: true, avatarUrl: true },
+    });
+
     return NextResponse.json(
-      updated,
+      {
+        ...updated,
+        project: {
+          id: project.id,
+          name: project.name,
+          sheetNo: project.sheetNo,
+        },
+        uploadedBy,
+      },
       {
         status: 201,
       }

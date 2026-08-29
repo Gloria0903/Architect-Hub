@@ -59,19 +59,6 @@ export async function GET(
           name: true,
           budget: true,
           invoiced: true,
-          payments: {
-            select: {
-              id: true,
-              amount: true,
-              date: true,
-              reference: true,
-              note: true,
-              createdAt: true,
-            },
-            orderBy: {
-              date: "desc",
-            },
-          },
         },
       });
 
@@ -86,6 +73,28 @@ export async function GET(
       );
     }
 
+    /*
+     * Fetched as its own flat query instead of a nested `payments:
+     * {select: {...}}` on the project query above -- on this app's
+     * hosting, queries involving relation joins (even a simple
+     * one-to-many with no further nesting inside it) fail with
+     * "Connection terminated unexpectedly".
+     */
+    const payments = await prisma.payment.findMany({
+      where: { projectId: id },
+      select: {
+        id: true,
+        amount: true,
+        date: true,
+        reference: true,
+        note: true,
+        createdAt: true,
+      },
+      orderBy: {
+        date: "desc",
+      },
+    });
+
     /**
      * IMPORTANT:
      *
@@ -94,7 +103,7 @@ export async function GET(
      * The Payment records are the authoritative record
      * of money actually received.
      */
-    const paid = project.payments.reduce(
+    const paid = payments.reduce(
       (total, payment) =>
         total + Number(payment.amount || 0),
       0
@@ -116,7 +125,7 @@ export async function GET(
 
       finance,
 
-      payments: project.payments.map(
+      payments: payments.map(
         (payment) => ({
           id: payment.id,
           amount: Number(payment.amount),

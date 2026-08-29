@@ -24,29 +24,46 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       startDate: true,
       dueDate: true,
       completionDate: true,
-      architect: { select: { name: true, initials: true, avatarUrl: true } },
-      documents: {
-        where: { clientVisible: true, isLatest: true, deletedAt: null },
-        select: { id: true, name: true, category: true, fileSize: true, version: true, uploadedAt: true },
-        orderBy: { uploadedAt: "desc" },
-      },
-      comments: {
-        select: { id: true, content: true, type: true, author: true, viaPortal: true, createdAt: true, resolvedAt: true },
-        orderBy: { createdAt: "desc" },
-      },
+      architectId: true,
     },
   });
 
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  /*
+   * Fetched as separate flat queries instead of nested selects on the
+   * project query above -- on this app's hosting, queries involving
+   * relation joins fail with "Connection terminated unexpectedly".
+   */
+  const [architect, documents, comments] = await Promise.all([
+    project.architectId
+      ? prisma.user.findUnique({
+          where: { id: project.architectId },
+          select: { name: true, initials: true, avatarUrl: true },
+        })
+      : Promise.resolve(null),
+    prisma.document.findMany({
+      where: { projectId: id, clientVisible: true, isLatest: true, deletedAt: null },
+      select: { id: true, name: true, category: true, fileSize: true, version: true, uploadedAt: true },
+      orderBy: { uploadedAt: "desc" },
+    }),
+    prisma.clientComment.findMany({
+      where: { projectId: id },
+      select: { id: true, content: true, type: true, author: true, viaPortal: true, createdAt: true, resolvedAt: true },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
   // Rewrite to the client-portal download proxy (enforces clientVisible +
   // clientId ownership) rather than the staff-only /api/documents/{id}.
   const withPortalUrls = {
     ...project,
-    documents: project.documents.map((d: (typeof project.documents)[number]) => ({
+    architect,
+    documents: documents.map((d) => ({
       ...d,
       fileUrl: `/api/client-portal/documents/${d.id}`,
     })),
+    comments,
   };
   return NextResponse.json(withPortalUrls);
 }

@@ -334,41 +334,6 @@ export async function POST(
                 supervisorId: true,
                 createdAt: true,
                 updatedAt: true,
-
-                /*
-                 * Safe client fields only.
-                 *
-                 * NEVER use client: true.
-                 */
-                client: {
-                  select: {
-                    id: true,
-                    name: true,
-                    contactPerson: true,
-                    email: true,
-                    phone: true,
-                    address: true,
-                    portalEnabled: true,
-                  },
-                },
-
-                architect: {
-                  select: {
-                    id: true,
-                    name: true,
-                    initials: true,
-                    avatarUrl: true,
-                  },
-                },
-
-                supervisor: {
-                  select: {
-                    id: true,
-                    name: true,
-                    initials: true,
-                    avatarUrl: true,
-                  },
-                },
               },
             });
 
@@ -445,6 +410,38 @@ export async function POST(
   }
 
   /*
+   * Same flat-fetch pattern used elsewhere in this app: matches what
+   * the removed nested client/architect/supervisor select used to
+   * provide, without the join that fails on this host.
+   */
+  const [reassignClient, reassignArchitect, reassignSupervisor] = await Promise.all([
+    prisma.client.findUnique({
+      where: { id: updatedProject.clientId },
+      select: {
+        id: true,
+        name: true,
+        contactPerson: true,
+        email: true,
+        phone: true,
+        address: true,
+        portalEnabled: true,
+      },
+    }),
+    updatedProject.architectId
+      ? prisma.user.findUnique({
+          where: { id: updatedProject.architectId },
+          select: { id: true, name: true, initials: true, avatarUrl: true },
+        })
+      : Promise.resolve(null),
+    updatedProject.supervisorId
+      ? prisma.user.findUnique({
+          where: { id: updatedProject.supervisorId },
+          select: { id: true, name: true, initials: true, avatarUrl: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  /*
    * ---------------------------------------------------------
    * Return safe response
    * ---------------------------------------------------------
@@ -456,6 +453,11 @@ export async function POST(
     message:
       "Project reassigned successfully",
 
-    project: updatedProject,
+    project: {
+      ...updatedProject,
+      client: reassignClient,
+      architect: reassignArchitect,
+      supervisor: reassignSupervisor,
+    },
   });
 }

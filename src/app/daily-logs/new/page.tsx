@@ -351,34 +351,6 @@ export default function NewDailyLogPage() {
               />
             </Field>
 
-            {/* PROJECT PROGRESS */}
-            <div className="rounded-md border border-line bg-slate-50/50 p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div>
-                  <label className="block text-[12px] text-muted">
-                    Project progress
-                  </label>
-
-                  <p className="mt-0.5 text-[11px] text-muted">
-                    Calculated automatically
-                    from project tasks and
-                    milestones.
-                  </p>
-                </div>
-
-                <span className="font-mono text-[15px] font-semibold text-blueprint">
-                  Calculated
-                </span>
-              </div>
-
-              <p className="text-[11px] text-muted">
-                Daily logs record site activity.
-                Project progress is determined
-                from the completion of project
-                deliverables.
-              </p>
-            </div>
-
             {/* ERROR */}
             {error && (
               <div className="rounded-md border border-brick/30 bg-brick/5 px-3 py-2">

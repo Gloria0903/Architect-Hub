@@ -43,6 +43,29 @@ export async function GET(req: NextRequest) {
   const authorId = searchParams.get("authorId");
   const dateFrom = searchParams.get("dateFrom");
 
+  /*
+   * Same flat-query fix as /api/projects, /api/payments,
+   * /api/invoices: relational where filters and nested includes both
+   * fail with "Connection terminated unexpectedly" on this app's
+   * hosting (HostPinnacle + Neon over WebSocket). Non-admin project
+   * access is resolved to a flat list of project IDs first, instead
+   * of `where: { project: { OR: [...] } }` (a join).
+   */
+  let accessibleProjectIds: string[] | undefined;
+
+  if (!isAdmin(session)) {
+    const accessibleProjects = await prisma.project.findMany({
+      where: {
+        OR: [
+          { architectId: session.user.id },
+          { supervisorId: session.user.id },
+        ],
+      },
+      select: { id: true },
+    });
+    accessibleProjectIds = accessibleProjects.map((p) => p.id);
+  }
+
   const logs = await prisma.dailyLog.findMany({
     where: {
       ...(projectId && { projectId }),
@@ -55,46 +78,22 @@ export async function GET(req: NextRequest) {
         },
       }),
 
-      // Non-admins only see logs for projects
-      // they are the architect or supervisor on.
-      ...(!isAdmin(session) && {
-        project: {
-          OR: [
-            { architectId: session.user.id },
-            { supervisorId: session.user.id },
-          ],
-        },
-      }),
+      ...(accessibleProjectIds
+        ? { projectId: { in: accessibleProjectIds } }
+        : {}),
     },
 
-    include: {
-      author: {
-        select: {
-          id: true,
-          name: true,
-          initials: true,
-          avatarUrl: true,
-        },
-      },
-
-      project: {
-        select: {
-          id: true,
-          name: true,
-          sheetNo: true,
-        },
-      },
-
-      attachments: {
-        where: { deletedAt: null, isLatest: true },
-        select: {
-          id: true,
-          name: true,
-          fileUrl: true,
-          fileSize: true,
-          mimeType: true,
-        },
-      },
+    select: {
+      id: true,
+      date: true,
+      workCompleted: true,
+      challenges: true,
+      pendingWork: true,
+      nextActions: true,
+      progress: true,
+      submittedAt: true,
+      projectId: true,
+      authorId: true,
     },
 
     orderBy: {
@@ -104,7 +103,50 @@ export async function GET(req: NextRequest) {
     take: 100,
   });
 
-  return NextResponse.json(logs);
+  const logAuthorIds = [...new Set(logs.map((l) => l.authorId))];
+  const logProjectIds = [...new Set(logs.map((l) => l.projectId))];
+  const logIds = logs.map((l) => l.id);
+
+  const [authors, projects, attachments] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: logAuthorIds } },
+      select: { id: true, name: true, initials: true, avatarUrl: true },
+    }),
+    prisma.project.findMany({
+      where: { id: { in: logProjectIds } },
+      select: { id: true, name: true, sheetNo: true },
+    }),
+    prisma.document.findMany({
+      where: { dailyLogId: { in: logIds }, deletedAt: null, isLatest: true },
+      select: {
+        id: true,
+        name: true,
+        fileUrl: true,
+        fileSize: true,
+        mimeType: true,
+        dailyLogId: true,
+      },
+    }),
+  ]);
+
+  const authorById = new Map(authors.map((a) => [a.id, a]));
+  const projectById = new Map(projects.map((p) => [p.id, p]));
+  const attachmentsByLogId = new Map<string, typeof attachments>();
+  for (const doc of attachments) {
+    if (!doc.dailyLogId) continue;
+    const list = attachmentsByLogId.get(doc.dailyLogId) ?? [];
+    list.push(doc);
+    attachmentsByLogId.set(doc.dailyLogId, list);
+  }
+
+  const logsWithRelations = logs.map((log) => ({
+    ...log,
+    author: authorById.get(log.authorId) ?? null,
+    project: projectById.get(log.projectId) ?? null,
+    attachments: attachmentsByLogId.get(log.id) ?? [],
+  }));
+
+  return NextResponse.json(logsWithRelations);
 }
 
 export async function POST(req: NextRequest) {
@@ -260,33 +302,17 @@ export async function POST(req: NextRequest) {
         progress: calculatedProgress,
       },
 
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            initials: true,
-            avatarUrl: true,
-          },
-        },
-
-        project: {
-          select: {
-            id: true,
-            name: true,
-            sheetNo: true,
-          },
-        },
-
-        attachments: {
-          select: {
-            id: true,
-            name: true,
-            fileUrl: true,
-            fileSize: true,
-            mimeType: true,
-          },
-        },
+      select: {
+        id: true,
+        date: true,
+        workCompleted: true,
+        challenges: true,
+        pendingWork: true,
+        nextActions: true,
+        progress: true,
+        submittedAt: true,
+        projectId: true,
+        authorId: true,
       },
     }),
 
@@ -301,7 +327,29 @@ export async function POST(req: NextRequest) {
     }),
   ]);
 
-  return NextResponse.json(log, {
-    status: 201,
-  });
+  /*
+   * Same flat-lookup pattern as GET above -- author/project fetched
+   * separately instead of a nested include on the create call itself,
+   * which fails on this host. A brand-new log has no attachments yet
+   * (those get added afterward via a separate upload step), so an
+   * empty array here matches what a nested include would have
+   * returned anyway.
+   */
+  const [author, project2] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: log.authorId },
+      select: { id: true, name: true, initials: true, avatarUrl: true },
+    }),
+    prisma.project.findUnique({
+      where: { id: log.projectId },
+      select: { id: true, name: true, sheetNo: true },
+    }),
+  ]);
+
+  return NextResponse.json(
+    { ...log, author, project: project2, attachments: [] },
+    {
+      status: 201,
+    }
+  );
 }

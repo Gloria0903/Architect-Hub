@@ -5,15 +5,17 @@
 /*
  * Color values as space-separated RGB triples (not hex) -- required
  * for Tailwind's rgb(var(--x) / <alpha-value>) opacity-modifier
- * technique used in tailwind.config.js. Light values are the app's
- * original palette, unchanged; dark values are a matching palette
- * designed for the same relative contrast/roles on dark backgrounds.
+ * technique used in tailwind.config.js.
  */
 :root {
   --color-vellum: 236 239 238;
   --color-surface: 255 255 255;
   --color-ink: 19 25 31;
   --color-ink-sidebar: 15 22 32;
+  /* Used by primary button backgrounds and the modal backdrop --
+     always the same fixed dark value, same as --color-ink since there
+     is no longer a theme for it to differ across. */
+  --color-ink-solid: 19 25 31;
   --color-muted: 107 118 128;
   --color-blueprint: 36 81 196;
   --color-blueprint-bg: 231 237 250;
@@ -26,28 +28,6 @@
   --color-ochre: 176 127 31;
   --color-ochre-bg: 246 238 221;
   --color-line: 222 227 229;
-}
-
-.dark {
-  --color-vellum: 18 21 25;
-  --color-surface: 27 32 38;
-  --color-ink: 231 233 236;
-  /* Sidebar is already dark-styled in light mode -- kept identical in
-     dark mode rather than getting darker still, which would remove
-     the visual separation between sidebar and page content. */
-  --color-ink-sidebar: 15 22 32;
-  --color-muted: 148 158 168;
-  --color-blueprint: 108 152 235;
-  --color-blueprint-bg: 30 42 71;
-  --color-blueprint-50: 30 42 71;
-  --color-blueprint-600: 108 152 235;
-  --color-brick: 226 137 106;
-  --color-brick-bg: 58 36 28;
-  --color-moss: 106 196 160;
-  --color-moss-bg: 27 50 38;
-  --color-ochre: 217 165 61;
-  --color-ochre-bg: 58 46 20;
-  --color-line: 68 76 87;
 }
 
 html,

@@ -282,249 +282,6 @@ export async function GET(
                 invoiced: true,
               }
             : {}),
-
-          /*
-           * ------------------------------------------------------------------
-           * CLIENT
-           * ------------------------------------------------------------------
-           */
-
-          client: {
-            select: {
-              id: true,
-              name: true,
-              contactPerson: true,
-              email: true,
-              phone: true,
-              address: true,
-              portalEnabled: true,
-              createdAt: true,
-              updatedAt: true,
-              lastPortalLoginAt: true,
-            },
-          },
-
-          /*
-           * ------------------------------------------------------------------
-           * ARCHITECT
-           * ------------------------------------------------------------------
-           */
-
-          architect: {
-            select: {
-              id: true,
-              name: true,
-              initials: true,
-              email: true,
-              phone: true,
-              avatarUrl: true,
-            },
-          },
-
-          /*
-           * ------------------------------------------------------------------
-           * SUPERVISOR
-           * ------------------------------------------------------------------
-           */
-
-          supervisor: {
-            select: {
-              id: true,
-              name: true,
-              initials: true,
-              avatarUrl: true,
-            },
-          },
-
-          /*
-           * ------------------------------------------------------------------
-           * DAILY LOGS
-           * ------------------------------------------------------------------
-           *
-           * Schema fields:
-           *
-           * id
-           * date
-           * workCompleted
-           * challenges
-           * pendingWork
-           * nextActions
-           * progress
-           * submittedAt
-           * projectId
-           * authorId
-           *
-           * There is NO createdAt.
-           */
-
-          dailyLogs: {
-            select: {
-              id: true,
-              date: true,
-              workCompleted: true,
-              challenges: true,
-              pendingWork: true,
-              nextActions: true,
-              progress: true,
-              submittedAt: true,
-
-              author: {
-                select: {
-                  id: true,
-                  name: true,
-                  initials: true,
-                  avatarUrl: true,
-                },
-              },
-            },
-
-            orderBy: {
-              date: "desc",
-            },
-          },
-
-          /*
-           * ------------------------------------------------------------------
-           * DOCUMENTS
-           * ------------------------------------------------------------------
-           */
-
-          documents: {
-            where: {
-              deletedAt: null,
-              isLatest: true,
-            },
-
-            select: {
-              id: true,
-              name: true,
-              fileUrl: true,
-              fileSize: true,
-              mimeType: true,
-              version: true,
-              uploadedAt: true,
-              uploadedById: true,
-              category: true,
-              isLatest: true,
-              clientVisible: true,
-              parentId: true,
-            },
-
-            orderBy: {
-              uploadedAt: "desc",
-            },
-          },
-
-          /*
-           * ------------------------------------------------------------------
-           * COMMENTS
-           * ------------------------------------------------------------------
-           *
-           * ClientComment does NOT contain updatedAt.
-           */
-
-          comments: {
-            select: {
-              id: true,
-              content: true,
-              type: true,
-              author: true,
-              createdAt: true,
-              resolvedAt: true,
-              projectId: true,
-              clientId: true,
-              viaPortal: true,
-
-              client: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-
-            orderBy: {
-              createdAt: "desc",
-            },
-          },
-
-          /*
-           * ------------------------------------------------------------------
-           * PAYMENTS
-           * ------------------------------------------------------------------
-           *
-           * ADMIN ONLY.
-           */
-
-          ...(admin
-            ? {
-                payments: {
-                  select: {
-                    id: true,
-                    amount: true,
-                    date: true,
-                    reference: true,
-                    note: true,
-                    createdAt: true,
-                    projectId: true,
-                    recordedById: true,
-
-                    recordedBy: {
-                      select: {
-                        id: true,
-                        name: true,
-                      },
-                    },
-                  },
-
-                  orderBy: {
-                    date: "desc" as const,
-                  },
-                },
-              }
-            : {}),
-
-          /*
-           * ------------------------------------------------------------------
-           * ASSIGNMENT HISTORY
-           * ------------------------------------------------------------------
-           */
-
-          assignmentHistory: {
-            select: {
-              id: true,
-              date: true,
-              reason: true,
-              fromArchitectId: true,
-              toArchitectId: true,
-              performedById: true,
-
-              fromArchitect: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-
-              toArchitect: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-
-              performedBy: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-
-            orderBy: {
-              date: "desc",
-            },
-          },
         },
       });
 
@@ -578,6 +335,195 @@ export async function GET(
         }
       );
     }
+
+    /*
+     * ----------------------------------------------------------------------
+     * FETCH RELATED DATA -- flat, batched queries instead of nested
+     * relation selects
+     * ----------------------------------------------------------------------
+     *
+     * The single combined query above used to select client, architect,
+     * supervisor, dailyLogs+author, documents, comments+client,
+     * payments+recordedBy, and assignmentHistory+3 user relations all
+     * in one nested query. On this app's hosting (HostPinnacle + Neon
+     * over WebSocket), queries involving relation joins fail with
+     * "Connection terminated unexpectedly" -- this is almost certainly
+     * why the project detail page was the most broken page in the app,
+     * since it's also the most relation-heavy query. Every one of
+     * those relations is fetched here instead as its own flat,
+     * single-table query, then stitched into the exact same response
+     * shape further down.
+     */
+
+    const [
+      client,
+      architect,
+      supervisor,
+      dailyLogsRaw,
+      documents,
+      commentsRaw,
+      paymentsRaw,
+      assignmentHistoryRaw,
+    ] = await Promise.all([
+      prisma.client.findUnique({
+        where: { id: project.clientId },
+        select: {
+          id: true,
+          name: true,
+          contactPerson: true,
+          email: true,
+          phone: true,
+          address: true,
+          portalEnabled: true,
+          createdAt: true,
+          updatedAt: true,
+          lastPortalLoginAt: true,
+        },
+      }),
+      project.architectId
+        ? prisma.user.findUnique({
+            where: { id: project.architectId },
+            select: { id: true, name: true, initials: true, email: true, phone: true, avatarUrl: true },
+          })
+        : Promise.resolve(null),
+      project.supervisorId
+        ? prisma.user.findUnique({
+            where: { id: project.supervisorId },
+            select: { id: true, name: true, initials: true, avatarUrl: true },
+          })
+        : Promise.resolve(null),
+      prisma.dailyLog.findMany({
+        where: { projectId: id },
+        select: {
+          id: true,
+          date: true,
+          workCompleted: true,
+          challenges: true,
+          pendingWork: true,
+          nextActions: true,
+          progress: true,
+          submittedAt: true,
+          authorId: true,
+        },
+        orderBy: { date: "desc" },
+      }),
+      prisma.document.findMany({
+        where: { projectId: id, deletedAt: null, isLatest: true },
+        select: {
+          id: true,
+          name: true,
+          fileUrl: true,
+          fileSize: true,
+          mimeType: true,
+          version: true,
+          uploadedAt: true,
+          uploadedById: true,
+          category: true,
+          isLatest: true,
+          clientVisible: true,
+          parentId: true,
+        },
+        orderBy: { uploadedAt: "desc" },
+      }),
+      prisma.clientComment.findMany({
+        where: { projectId: id },
+        select: {
+          id: true,
+          content: true,
+          type: true,
+          author: true,
+          createdAt: true,
+          resolvedAt: true,
+          projectId: true,
+          clientId: true,
+          viaPortal: true,
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      admin
+        ? prisma.payment.findMany({
+            where: { projectId: id },
+            select: {
+              id: true,
+              amount: true,
+              date: true,
+              reference: true,
+              note: true,
+              createdAt: true,
+              projectId: true,
+              recordedById: true,
+            },
+            orderBy: { date: "desc" },
+          })
+        : Promise.resolve([]),
+      prisma.assignmentRecord.findMany({
+        where: { projectId: id },
+        select: {
+          id: true,
+          date: true,
+          reason: true,
+          fromArchitectId: true,
+          toArchitectId: true,
+          performedById: true,
+        },
+        orderBy: { date: "desc" },
+      }),
+    ]);
+
+    /*
+     * Second round: batch-fetch every user/client referenced by the
+     * above, deduplicated across all of them into as few queries as
+     * possible.
+     */
+    const dailyLogAuthorIds = dailyLogsRaw.map((l) => l.authorId);
+    const commentClientIds = commentsRaw.map((c) => c.clientId);
+    const paymentRecorderIds = paymentsRaw.map((p) => p.recordedById);
+    const assignmentUserIds = assignmentHistoryRaw.flatMap((a) =>
+      [a.fromArchitectId, a.performedById, a.toArchitectId].filter(
+        (v): v is string => Boolean(v)
+      )
+    );
+
+    const allUserIds = [
+      ...new Set([...dailyLogAuthorIds, ...paymentRecorderIds, ...assignmentUserIds]),
+    ];
+    const allClientIds = [...new Set(commentClientIds)];
+
+    const [relatedUsers, relatedClients] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: allUserIds } },
+        select: { id: true, name: true, initials: true, avatarUrl: true },
+      }),
+      prisma.client.findMany({
+        where: { id: { in: allClientIds } },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    const userById = new Map(relatedUsers.map((u) => [u.id, u]));
+    const clientById = new Map(relatedClients.map((c) => [c.id, c]));
+
+    const dailyLogs = dailyLogsRaw.map((log) => ({
+      ...log,
+      author: userById.get(log.authorId) ?? null,
+    }));
+
+    const comments = commentsRaw.map((comment) => ({
+      ...comment,
+      client: clientById.get(comment.clientId) ?? null,
+    }));
+
+    const payments = paymentsRaw.map((payment) => ({
+      ...payment,
+      recordedBy: userById.get(payment.recordedById) ?? null,
+    }));
+
+    const assignmentHistory = assignmentHistoryRaw.map((record) => ({
+      ...record,
+      fromArchitect: record.fromArchitectId ? (userById.get(record.fromArchitectId) ?? null) : null,
+      toArchitect: userById.get(record.toArchitectId) ?? null,
+      performedBy: userById.get(record.performedById) ?? null,
+    }));
 
     /*
      * ----------------------------------------------------------------------
@@ -686,6 +632,15 @@ export async function GET(
         remainingBudget:
           finance.remainingBudget,
 
+        client,
+        architect,
+        supervisor,
+        dailyLogs,
+        documents,
+        comments,
+        payments,
+        assignmentHistory,
+
         tasks,
         milestones,
       });
@@ -702,6 +657,13 @@ export async function GET(
     return NextResponse.json({
       ...project,
       progress: calculatedProgress,
+      client,
+      architect,
+      supervisor,
+      dailyLogs,
+      documents,
+      comments,
+      assignmentHistory,
       tasks,
       milestones,
     });
@@ -1235,36 +1197,6 @@ export async function PATCH(
 
           createdAt: true,
           updatedAt: true,
-
-          client: {
-            select: {
-              id: true,
-              name: true,
-              contactPerson: true,
-              email: true,
-              phone: true,
-              address: true,
-              portalEnabled: true,
-            },
-          },
-
-          architect: {
-            select: {
-              id: true,
-              name: true,
-              initials: true,
-              avatarUrl: true,
-            },
-          },
-
-          supervisor: {
-            select: {
-              id: true,
-              name: true,
-              initials: true,
-              avatarUrl: true,
-            },
-          },
         },
       });
 
@@ -1285,6 +1217,38 @@ export async function PATCH(
         Number(project.invoiced ?? 0),
         paid
       );
+
+    /*
+     * Same flat-fetch pattern as GET above -- matches what the removed
+     * nested client/architect/supervisor select used to provide in
+     * this response, without the join that fails on this host.
+     */
+    const [patchClient, patchArchitect, patchSupervisor] = await Promise.all([
+      prisma.client.findUnique({
+        where: { id: project.clientId },
+        select: {
+          id: true,
+          name: true,
+          contactPerson: true,
+          email: true,
+          phone: true,
+          address: true,
+          portalEnabled: true,
+        },
+      }),
+      project.architectId
+        ? prisma.user.findUnique({
+            where: { id: project.architectId },
+            select: { id: true, name: true, initials: true, avatarUrl: true },
+          })
+        : Promise.resolve(null),
+      project.supervisorId
+        ? prisma.user.findUnique({
+            where: { id: project.supervisorId },
+            select: { id: true, name: true, initials: true, avatarUrl: true },
+          })
+        : Promise.resolve(null),
+    ]);
 
     /*
      * ----------------------------------------------------------------------
@@ -1330,6 +1294,10 @@ export async function PATCH(
 
     return NextResponse.json({
       ...project,
+
+      client: patchClient,
+      architect: patchArchitect,
+      supervisor: patchSupervisor,
 
       budget: finance.budget,
       invoiced: finance.invoiced,
