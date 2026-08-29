@@ -11,7 +11,16 @@ import {
  * Storage for uploaded documents and avatars.
  *
  * S3 is used when AWS_S3_BUCKET and AWS_REGION are configured.
- * Otherwise files are stored locally in /uploads.
+ * Otherwise files are stored locally.
+ *
+ * LOCAL_UPLOAD_DIR (optional) sets where local files live -- an
+ * absolute path outside the app's own deploy directory is strongly
+ * recommended on hosting where deploys wipe that directory clean each
+ * time (see docs/DEPLOYMENT.md's HostPinnacle section, step 4a) --
+ * without this, every future deploy would delete every uploaded file.
+ * Defaults to ./uploads (relative to the app directory) if unset,
+ * matching the original behavior for local dev and hosts that don't
+ * need this.
  *
  * Documents can provide a relative storage directory such as:
  *
@@ -20,7 +29,9 @@ import {
  * The generated fileKey is always returned to the caller and is the
  * canonical identifier used for subsequent downloads/deletes.
  */
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+const UPLOAD_DIR =
+  process.env.LOCAL_UPLOAD_DIR ||
+  path.join(process.cwd(), "uploads");
 
 const isS3Configured = Boolean(
   process.env.AWS_S3_BUCKET &&
@@ -29,12 +40,16 @@ const isS3Configured = Boolean(
 
 if (
   !isS3Configured &&
-  process.env.NODE_ENV === "production"
+  process.env.NODE_ENV === "production" &&
+  !process.env.LOCAL_UPLOAD_DIR
 ) {
   console.warn(
-    "[storage] AWS_S3_BUCKET/AWS_REGION not set in a production environment. " +
-      "Falling back to local disk. Uploaded files will NOT survive a redeploy " +
-      "on most hosting platforms. Set both env vars to switch to S3."
+    "[storage] AWS_S3_BUCKET/AWS_REGION not set in a production environment, " +
+      "and LOCAL_UPLOAD_DIR isn't set either. Falling back to ./uploads inside " +
+      "the app directory -- on hosting where deploys wipe that directory clean " +
+      "(like HostPinnacle's pipeline), every future deploy will delete every " +
+      "uploaded file. Set LOCAL_UPLOAD_DIR to an absolute path OUTSIDE the app " +
+      "directory to fix this, or set AWS_S3_BUCKET/AWS_REGION to use S3 instead."
   );
 }
 
