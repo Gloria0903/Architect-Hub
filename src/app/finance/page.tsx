@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
@@ -32,6 +33,7 @@ export default function FinancePage() {
     projects,
     clients,
     payments,
+    invoices,
     addPayment,
     addInvoice,
   } = useStore();
@@ -500,6 +502,13 @@ export default function FinancePage() {
       )
     : payments;
 
+  const projectInvoices = selectedProject
+    ? invoices.filter(
+        (invoice) =>
+          invoice.projectId === selectedProject
+      )
+    : invoices;
+
   /*
    * --------------------------------------------------------------------------
    * RENDER
@@ -918,6 +927,80 @@ export default function FinancePage() {
                           "No note"}
                       </div>
                     </div>
+                  );
+                })
+              )}
+            </div>
+          </Card>
+
+          {/* INVOICE HISTORY */}
+
+          <Card className="overflow-hidden">
+            <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+              <div className="font-medium text-ink text-[12.5px]">
+                Invoice history
+              </div>
+
+              {selectedProject && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedProject(null)
+                  }
+                  className="text-[11px] text-muted hover:text-ink"
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+
+            <div className="divide-y divide-line max-h-96 overflow-y-auto">
+              {projectInvoices.length === 0 ? (
+                <div className="p-6 text-center text-muted text-[12.5px]">
+                  No invoices recorded yet.
+                </div>
+              ) : (
+                projectInvoices.map((invoice) => {
+                  const project =
+                    projects.find(
+                      (item) =>
+                        item.id ===
+                        invoice.projectId
+                    );
+
+                  return (
+                    <Link
+                      key={invoice.id}
+                      href={`/finance/invoices/${invoice.id}`}
+                      className="block px-4 py-3 hover:bg-vellum/60 transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="font-mono text-[12px] text-blueprint font-medium">
+                          {formatKsh(
+                            invoice.amount
+                          )}
+                        </div>
+
+                        <div className="font-mono text-[11px] text-muted">
+                          {invoice.date}
+                        </div>
+                      </div>
+
+                      <div className="text-[11.5px] text-ink">
+                        {project?.name ||
+                          "Unknown project"}
+                      </div>
+
+                      <div className="text-[11px] text-muted mt-0.5">
+                        {invoice.reference ||
+                          "No reference"}{" "}
+                        ·{" "}
+                        {invoice.note ||
+                          "No note"}
+                        {" · "}
+                        <span className="text-blueprint">View / print</span>
+                      </div>
+                    </Link>
                   );
                 })
               )}

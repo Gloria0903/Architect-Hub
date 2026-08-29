@@ -115,6 +115,7 @@ export interface Project {
   dailyLogs?: DailyLog[];
   comments?: ClientComment[];
   payments?: Payment[];
+  invoices?: Invoice[];
 }
 
 export interface AssignmentRecord {
@@ -212,6 +213,28 @@ export interface ClientComment {
 }
 
 export interface Payment {
+  id: string;
+  projectId: string;
+
+  project?: {
+    id: string;
+    name: string;
+    sheetNo: string;
+  };
+
+  amount: number;
+  date: string;
+
+  reference?: string;
+  note?: string;
+
+  recordedBy?: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface Invoice {
   id: string;
   projectId: string;
 
@@ -496,6 +519,7 @@ interface AppState {
   logs: DailyLog[];
   comments: ClientComment[];
   payments: Payment[];
+  invoices: Invoice[];
   notifications: Notification[];
   documents: Document[];
 
@@ -672,6 +696,7 @@ export function AppProvider({
       logs: [],
       comments: [],
       payments: [],
+      invoices: [],
       notifications: [],
       documents: [],
       loading: false,
@@ -741,6 +766,7 @@ export function AppProvider({
           logs,
           comments,
           payments,
+          invoices,
           notificationResponse,
           documents,
         ] = await Promise.all([
@@ -768,6 +794,10 @@ export function AppProvider({
             "/api/payments"
           ),
 
+          apiFetch<Invoice[]>(
+            "/api/invoices"
+          ),
+
           apiFetch<{
             notifications: Notification[];
             unreadCount: number;
@@ -791,6 +821,7 @@ export function AppProvider({
           logs: logs ?? [],
           comments: comments ?? [],
           payments: payments ?? [],
+          invoices: invoices ?? [],
           notifications,
           documents: documents ?? [],
           loading: false,

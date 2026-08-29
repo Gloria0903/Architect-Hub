@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect } from "react";
-import { LayoutGrid, Folder, ClipboardList, Files, Wallet, MessageCircle, History, Users, Settings, Repeat, Building2, X } from "lucide-react";
+import { LayoutGrid, Folder, ClipboardList, Files, Wallet, MessageCircle, History, Users, Settings, Repeat, Building2, X, FileBarChart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/store/app-store";
 import { useFirmName } from "@/lib/use-firm-name";
@@ -131,6 +131,12 @@ export function Sidebar({
   href="/activity"
   label="Activity timeline"
   icon={History}
+/>
+
+<NavItem
+  href="/reports"
+  label="Reports"
+  icon={FileBarChart}
 />
       <SectionLabel>TEAM</SectionLabel>
       {team.filter(i => isAdmin || i.href !== "/staff").map(i => <NavItem key={i.href} {...i} />)}

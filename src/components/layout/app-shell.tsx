@@ -11,9 +11,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-vellum">
-      <Sidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
-      <main className="flex-1 p-4 sm:p-6 lg:p-7 overflow-x-hidden min-w-0">
-        <div className="flex items-center justify-between mb-3">
+      <div className="print:hidden">
+        <Sidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
+      </div>
+      <main className="flex-1 p-4 sm:p-6 lg:p-7 print:p-0 overflow-x-hidden min-w-0">
+        <div className="flex items-center justify-between mb-3 print:hidden">
           {/* Hamburger trigger, mobile only -- the sidebar is always
               visible at lg and up, so this has nothing to do there. */}
           <button

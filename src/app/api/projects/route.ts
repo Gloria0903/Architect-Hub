@@ -122,6 +122,7 @@ export async function GET(req: NextRequest) {
 
         status: true,
         priority: true,
+        progress: true,
 
         startDate: true,
         dueDate: true,
