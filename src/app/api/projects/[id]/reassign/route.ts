@@ -301,66 +301,66 @@ export async function POST(
   let updatedProject;
 
   try {
+    /*
+     * Deliberately NOT wrapped in prisma.$transaction() -- same
+     * reasoning as /api/logs: the wrapper itself requires this app's
+     * WebSocket connection to the database, unreliable on this host
+     * regardless of query simplicity. Two sequential writes instead.
+     * If the project update succeeds but the history record fails,
+     * the reassignment still took effect and is visible on the
+     * project -- only the audit trail entry for it is missing, a
+     * minor gap, not a correctness problem.
+     */
     updatedProject =
-      await prisma.$transaction(
-        async (tx) => {
-          /*
-           * Update project.
-           */
-          const updated =
-            await tx.project.update({
-              where: {
-                id,
-              },
+      await prisma.project.update({
+        where: {
+          id,
+        },
 
-              data: {
-                architectId:
-                  toArchitectId,
-              },
+        data: {
+          architectId:
+            toArchitectId,
+        },
 
-              select: {
-                id: true,
-                name: true,
-                sheetNo: true,
-                location: true,
-                description: true,
-                status: true,
-                priority: true,
-                startDate: true,
-                dueDate: true,
-                completionDate: true,
-                clientId: true,
-                architectId: true,
-                supervisorId: true,
-                createdAt: true,
-                updatedAt: true,
-              },
-            });
+        select: {
+          id: true,
+          name: true,
+          sheetNo: true,
+          location: true,
+          description: true,
+          status: true,
+          priority: true,
+          startDate: true,
+          dueDate: true,
+          completionDate: true,
+          clientId: true,
+          architectId: true,
+          supervisorId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
 
-          /*
-           * Record assignment history.
-           */
-          await tx.assignmentRecord.create({
-            data: {
-              projectId: id,
+    /*
+     * Record assignment history.
+     */
+    await prisma.assignmentRecord.create({
+      data: {
+        projectId: id,
 
-              fromArchitectId:
-                project.architectId,
+        fromArchitectId:
+          project.architectId,
 
-              toArchitectId:
-                toArchitectId,
+        toArchitectId:
+          toArchitectId,
 
-              reason:
-                reason || null,
+        reason:
+          reason || null,
 
-              performedById:
-                session.user.id,
-            },
-          });
-
-          return updated;
-        }
-      );
+        performedById:
+          session.user.id,
+      },
+    });
   } catch (error) {
     console.error(
       "Project reassignment failed:",

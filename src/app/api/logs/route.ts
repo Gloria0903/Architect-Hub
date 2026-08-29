@@ -281,51 +281,61 @@ export async function POST(req: NextRequest) {
    * using the calculated value.
    *
    * The user never supplies this percentage.
+   *
+   * Deliberately NOT wrapped in prisma.$transaction() -- the
+   * transaction wrapper itself requires this app's WebSocket
+   * connection to the database, which is unreliable on this host
+   * regardless of how simple the queries inside it are (confirmed:
+   * flattening these two queries' shape alone did not fix this route,
+   * only removing the transaction wrapper did). Two sequential writes
+   * instead. If the log write succeeds but the progress update fails,
+   * the log still exists and progress is very slightly stale until
+   * the next log submission recalculates it -- a minor, self-healing
+   * inconsistency, not a correctness problem the way an unprotected
+   * financial write would be.
    */
-  const [log] = await prisma.$transaction([
-    prisma.dailyLog.create({
-      data: {
-        projectId: parsed.data.projectId,
+  const log = await prisma.dailyLog.create({
+    data: {
+      projectId: parsed.data.projectId,
 
-        authorId: session.user.id,
+      authorId: session.user.id,
 
-        date: logDate,
+      date: logDate,
 
-        workCompleted: parsed.data.workCompleted,
+      workCompleted: parsed.data.workCompleted,
 
-        challenges: parsed.data.challenges,
+      challenges: parsed.data.challenges,
 
-        pendingWork: parsed.data.pendingWork,
+      pendingWork: parsed.data.pendingWork,
 
-        nextActions: parsed.data.nextActions,
+      nextActions: parsed.data.nextActions,
 
-        progress: calculatedProgress,
-      },
+      progress: calculatedProgress,
+    },
 
-      select: {
-        id: true,
-        date: true,
-        workCompleted: true,
-        challenges: true,
-        pendingWork: true,
-        nextActions: true,
-        progress: true,
-        submittedAt: true,
-        projectId: true,
-        authorId: true,
-      },
-    }),
+    select: {
+      id: true,
+      date: true,
+      workCompleted: true,
+      challenges: true,
+      pendingWork: true,
+      nextActions: true,
+      progress: true,
+      submittedAt: true,
+      projectId: true,
+      authorId: true,
+    },
+  });
 
-    prisma.project.update({
-      where: {
-        id: parsed.data.projectId,
-      },
+  await prisma.project.update({
+    where: {
+      id: parsed.data.projectId,
+    },
 
-      data: {
-        progress: calculatedProgress,
-      },
-    }),
-  ]);
+    data: {
+      progress: calculatedProgress,
+    },
+  });
 
   /*
    * Same flat-lookup pattern as GET above -- author/project fetched

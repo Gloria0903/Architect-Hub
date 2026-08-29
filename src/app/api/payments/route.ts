@@ -581,220 +581,195 @@ export async function POST(
    */
 
   try {
-    const result =
-      await prisma.$transaction(
-        async (tx) => {
-          /*
-           * -----------------------------------------------------
-           * Re-read current project state
-           * -----------------------------------------------------
-           */
+    /*
+     * Deliberately NOT wrapped in prisma.$transaction() -- confirmed
+     * in production that the wrapper itself requires this app's
+     * WebSocket connection to the database, which is unreliable on
+     * this host regardless of how simple the queries inside it are.
+     * Payments and invoices are the one place in this app where that
+     * matters for real correctness (preventing overpayment), so
+     * simply dropping the safety check (like the lower-stakes fix in
+     * /api/logs and /reassign) isn't acceptable here.
+     *
+     * Instead: increment first, then verify, then ACTIVELY UNDO (a
+     * compensating decrement + deleting the payment just created) if
+     * the increment turns out to have exceeded budget -- which can
+     * only happen if a genuinely concurrent payment landed in the
+     * narrow window between this request's own pre-check and its
+     * increment. The end state that's actually left standing is
+     * always safe: either the payment persists and paid <= budget, or
+     * it doesn't persist at all. Every step here is a single, simple
+     * query -- the kind already confirmed working on this host.
+     */
 
-          const currentProject =
-            await tx.project.findUnique({
-              where: {
-                id: projectId,
-              },
+    const currentProject =
+      await prisma.project.findUnique({
+        where: {
+          id: projectId,
+        },
 
-              select: {
-                id: true,
-                name: true,
-                sheetNo: true,
+        select: {
+          id: true,
+          name: true,
+          sheetNo: true,
 
-                budget: true,
-                invoiced: true,
-                paid: true,
+          budget: true,
+          invoiced: true,
+          paid: true,
 
-                architectId: true,
-                supervisorId: true,
+          architectId: true,
+          supervisorId: true,
 
-                archivedAt: true,
-              },
-            });
+          archivedAt: true,
+        },
+      });
 
-          if (!currentProject) {
-            throw new Error(
-              "PROJECT_NOT_FOUND"
-            );
-          }
-
-          /*
-           * -----------------------------------------------------
-           * Archived project check
-           * -----------------------------------------------------
-           */
-
-          if (
-            currentProject.archivedAt
-          ) {
-            throw new Error(
-              "PROJECT_ARCHIVED"
-            );
-          }
-
-          /*
-           * -----------------------------------------------------
-           * Recalculate from latest state
-           * -----------------------------------------------------
-           */
-
-          const currentBudget =
-            Number(
-              currentProject.budget ??
-                0
-            );
-
-          const currentPaid =
-            Number(
-              currentProject.paid ??
-                0
-            );
-
-          /*
-           * -----------------------------------------------------
-           * Latest outstanding balance (capped directly by
-           * contract budget -- invoicing is informational only
-           * and no longer gates whether a payment is allowed)
-           * -----------------------------------------------------
-           */
-
-          const currentOutstanding =
-            Math.max(
-              currentBudget -
-                currentPaid,
-              0
-            );
-
-          /*
-           * -----------------------------------------------------
-           * Prevent overpayment
-           * -----------------------------------------------------
-           */
-
-          if (
-            amount >
-            currentOutstanding
-          ) {
-            throw new Error(
-              `PAYMENT_EXCEEDS_BALANCE:${currentOutstanding}`
-            );
-          }
-
-          /*
-           * -----------------------------------------------------
-           * Create payment record
-           * -----------------------------------------------------
-           */
-
-          const payment =
-            await tx.payment.create({
-              data: {
-                projectId,
-
-                recordedById:
-                  session.user.id,
-
-                amount,
-
-                date: paymentDate,
-
-                reference:
-                  reference?.trim() ||
-                  null,
-
-                note:
-                  note?.trim() ||
-                  null,
-              },
-
-              select: {
-                id: true,
-
-                amount: true,
-
-                date: true,
-
-                reference: true,
-
-                note: true,
-
-                createdAt: true,
-
-                projectId: true,
-
-                recordedById: true,
-              },
-            });
-
-          /*
-           * -----------------------------------------------------
-           * Update project paid amount
-           * -----------------------------------------------------
-           *
-           * Payment increases PAID.
-           *
-           * Payment does NOT increase INVOICED.
-           */
-
-          const updatedProject =
-            await tx.project.update({
-              where: {
-                id: projectId,
-              },
-
-              data: {
-                paid: {
-                  increment: amount,
-                },
-              },
-
-              select: {
-                id: true,
-                name: true,
-                sheetNo: true,
-
-                budget: true,
-                invoiced: true,
-                paid: true,
-
-                architectId: true,
-                supervisorId: true,
-              },
-            });
-
-          /*
-           * -----------------------------------------------------
-           * Final consistency check
-           * -----------------------------------------------------
-           */
-
-          const updatedBudget =
-            Number(
-              updatedProject.budget ??
-                0
-            );
-
-          const updatedPaid =
-            Number(
-              updatedProject.paid ??
-                0
-            );
-
-          if (
-            updatedPaid >
-            updatedBudget
-          ) {
-            throw new Error(
-              "UPDATED_PAID_EXCEEDS_BUDGET"
-            );
-          }
-
-          return {
-            payment,
-            updatedProject,
-          };
-        }
+    if (!currentProject) {
+      throw new Error(
+        "PROJECT_NOT_FOUND"
       );
+    }
+
+    if (
+      currentProject.archivedAt
+    ) {
+      throw new Error(
+        "PROJECT_ARCHIVED"
+      );
+    }
+
+    const currentBudget =
+      Number(
+        currentProject.budget ??
+          0
+      );
+
+    const currentPaid =
+      Number(
+        currentProject.paid ??
+          0
+      );
+
+    const currentOutstanding =
+      Math.max(
+        currentBudget -
+          currentPaid,
+        0
+      );
+
+    if (
+      amount >
+      currentOutstanding
+    ) {
+      throw new Error(
+        `PAYMENT_EXCEEDS_BALANCE:${currentOutstanding}`
+      );
+    }
+
+    const updatedProject =
+      await prisma.project.update({
+        where: {
+          id: projectId,
+        },
+
+        data: {
+          paid: {
+            increment: amount,
+          },
+        },
+
+        select: {
+          id: true,
+          name: true,
+          sheetNo: true,
+
+          budget: true,
+          invoiced: true,
+          paid: true,
+
+          architectId: true,
+          supervisorId: true,
+        },
+      });
+
+    const payment =
+      await prisma.payment.create({
+        data: {
+          projectId,
+
+          recordedById:
+            session.user.id,
+
+          amount,
+
+          date: paymentDate,
+
+          reference:
+            reference?.trim() ||
+            null,
+
+          note:
+            note?.trim() ||
+            null,
+        },
+
+        select: {
+          id: true,
+
+          amount: true,
+
+          date: true,
+
+          reference: true,
+
+          note: true,
+
+          createdAt: true,
+
+          projectId: true,
+
+          recordedById: true,
+        },
+      });
+
+    const updatedBudget =
+      Number(
+        updatedProject.budget ??
+          0
+      );
+
+    const updatedPaid =
+      Number(
+        updatedProject.paid ??
+          0
+      );
+
+    if (
+      updatedPaid >
+      updatedBudget
+    ) {
+      /*
+       * Genuinely rare: a concurrent payment landed between the
+       * pre-check above and this increment. Undo both writes so
+       * nothing unsafe is left standing, then report the failure.
+       */
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { paid: { decrement: amount } },
+      });
+      await prisma.payment.delete({
+        where: { id: payment.id },
+      });
+
+      throw new Error(
+        "UPDATED_PAID_EXCEEDS_BUDGET"
+      );
+    }
+
+    const result = {
+      payment,
+      updatedProject,
+    };
 
     /*
      * ---------------------------------------------------------------

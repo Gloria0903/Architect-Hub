@@ -11,16 +11,21 @@ export async function PATCH(_req: NextRequest, { params }: { params: Promise<{ i
 
   const { id } = await params;
 
-  // updateMany + userId filter (rather than update by id alone) so a user
-  // can never mark someone else's notification as read by guessing an id.
-  const result = await prisma.notification.updateMany({
-    where: { id, userId: session.user.id },
-    data: { read: true },
-  });
+  try {
+    // updateMany + userId filter (rather than update by id alone) so a user
+    // can never mark someone else's notification as read by guessing an id.
+    const result = await prisma.notification.updateMany({
+      where: { id, userId: session.user.id },
+      data: { read: true },
+    });
 
-  if (result.count === 0) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (result.count === 0) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error(`Failed to mark notification ${id} as read:`, error);
+    return NextResponse.json({ error: "Failed to update notification" }, { status: 500 });
   }
-
-  return NextResponse.json({ success: true });
 }

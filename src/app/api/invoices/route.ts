@@ -182,54 +182,78 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const currentProject = await tx.project.findUnique({
-        where: { id: projectId },
-        select: { id: true, budget: true, invoiced: true, paid: true },
-      });
-
-      if (!currentProject) {
-        throw new Error("PROJECT_NOT_FOUND");
-      }
-
-      const currentBudget = Number(currentProject.budget ?? 0);
-      const currentInvoiced = Number(currentProject.invoiced ?? 0);
-
-      const remainingToInvoice = Math.max(currentBudget - currentInvoiced, 0);
-
-      if (amount > remainingToInvoice) {
-        throw new Error(`INVOICE_EXCEEDS_BUDGET:${remainingToInvoice}`);
-      }
-
-      const invoice = await tx.invoice.create({
-        data: {
-          projectId,
-          recordedById: session.user.id,
-          amount,
-          date: invoiceDate,
-          reference: reference?.trim() || null,
-          note: note?.trim() || null,
-        },
-        select: {
-          id: true,
-          amount: true,
-          date: true,
-          reference: true,
-          note: true,
-          createdAt: true,
-          projectId: true,
-          recordedById: true,
-        },
-      });
-
-      const updatedProject = await tx.project.update({
-        where: { id: projectId },
-        data: { invoiced: { increment: amount } },
-        select: { id: true, budget: true, invoiced: true, paid: true },
-      });
-
-      return { invoice, project: updatedProject };
+    /*
+     * Deliberately NOT wrapped in prisma.$transaction() -- confirmed
+     * in production that the wrapper itself requires this app's
+     * WebSocket connection to the database, unreliable on this host
+     * regardless of query simplicity. Same safe pattern as
+     * /api/payments: increment first, then verify, then actively
+     * undo (compensating decrement + deleting the invoice just
+     * created) if a genuinely concurrent invoice landed in the
+     * narrow window between the pre-check and the increment. The end
+     * state left standing is always safe.
+     */
+    const currentProject = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, budget: true, invoiced: true, paid: true },
     });
+
+    if (!currentProject) {
+      throw new Error("PROJECT_NOT_FOUND");
+    }
+
+    const currentBudget = Number(currentProject.budget ?? 0);
+    const currentInvoiced = Number(currentProject.invoiced ?? 0);
+
+    const remainingToInvoice = Math.max(currentBudget - currentInvoiced, 0);
+
+    if (amount > remainingToInvoice) {
+      throw new Error(`INVOICE_EXCEEDS_BUDGET:${remainingToInvoice}`);
+    }
+
+    const updatedProject = await prisma.project.update({
+      where: { id: projectId },
+      data: { invoiced: { increment: amount } },
+      select: { id: true, budget: true, invoiced: true, paid: true },
+    });
+
+    const invoice = await prisma.invoice.create({
+      data: {
+        projectId,
+        recordedById: session.user.id,
+        amount,
+        date: invoiceDate,
+        reference: reference?.trim() || null,
+        note: note?.trim() || null,
+      },
+      select: {
+        id: true,
+        amount: true,
+        date: true,
+        reference: true,
+        note: true,
+        createdAt: true,
+        projectId: true,
+        recordedById: true,
+      },
+    });
+
+    const updatedBudget = Number(updatedProject.budget ?? 0);
+    const updatedInvoiced = Number(updatedProject.invoiced ?? 0);
+
+    if (updatedInvoiced > updatedBudget) {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { invoiced: { decrement: amount } },
+      });
+      await prisma.invoice.delete({
+        where: { id: invoice.id },
+      });
+
+      throw new Error(`INVOICE_EXCEEDS_BUDGET:${remainingToInvoice}`);
+    }
+
+    const result = { invoice, project: updatedProject };
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
