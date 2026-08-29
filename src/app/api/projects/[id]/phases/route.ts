@@ -24,17 +24,6 @@ export async function GET(
 
   const project = await prisma.project.findUnique({
     where: { id },
-    include: {
-      phases: {
-        include: {
-          tasks: true,
-          milestones: true,
-        },
-        orderBy: {
-          sortOrder: "asc",
-        },
-      },
-    },
   });
 
   if (!project) {
@@ -51,7 +40,41 @@ export async function GET(
     );
   }
 
-  return NextResponse.json(project.phases);
+  const phases = await prisma.projectPhase.findMany({
+    where: { projectId: id },
+    orderBy: { sortOrder: "asc" },
+  });
+
+  const phaseIds = phases.map((p) => p.id);
+
+  const [tasks, milestones] = await Promise.all([
+    prisma.projectTask.findMany({ where: { phaseId: { in: phaseIds } } }),
+    prisma.projectMilestone.findMany({ where: { phaseId: { in: phaseIds } } }),
+  ]);
+
+  const tasksByPhaseId = new Map<string, typeof tasks>();
+  for (const task of tasks) {
+    if (!task.phaseId) continue;
+    const list = tasksByPhaseId.get(task.phaseId) ?? [];
+    list.push(task);
+    tasksByPhaseId.set(task.phaseId, list);
+  }
+
+  const milestonesByPhaseId = new Map<string, typeof milestones>();
+  for (const milestone of milestones) {
+    if (!milestone.phaseId) continue;
+    const list = milestonesByPhaseId.get(milestone.phaseId) ?? [];
+    list.push(milestone);
+    milestonesByPhaseId.set(milestone.phaseId, list);
+  }
+
+  const phasesWithRelations = phases.map((phase) => ({
+    ...phase,
+    tasks: tasksByPhaseId.get(phase.id) ?? [],
+    milestones: milestonesByPhaseId.get(phase.id) ?? [],
+  }));
+
+  return NextResponse.json(phasesWithRelations);
 }
 
 export async function POST(

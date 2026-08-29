@@ -24,18 +24,6 @@ export async function GET(
 
   const project = await prisma.project.findUnique({
     where: { id },
-    include: {
-      tasks: {
-        include: {
-          phase: true,
-          assignee: true,
-          updates: true,
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-    },
   });
 
   if (!project) {
@@ -52,7 +40,44 @@ export async function GET(
     );
   }
 
-  return NextResponse.json(project.tasks);
+  /*
+   * Same flat-query fix as elsewhere in this app: nested includes fail
+   * with "Connection terminated unexpectedly" on this host. Tasks and
+   * every relation they reference (phase, assignee, updates) are
+   * fetched as separate flat queries and stitched together below.
+   */
+  const tasks = await prisma.projectTask.findMany({
+    where: { projectId: id },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const taskIds = tasks.map((t) => t.id);
+  const phaseIds = [...new Set(tasks.map((t) => t.phaseId).filter((v): v is string => Boolean(v)))];
+  const assigneeIds = [...new Set(tasks.map((t) => t.assigneeId).filter((v): v is string => Boolean(v)))];
+
+  const [phases, assignees, updates] = await Promise.all([
+    prisma.projectPhase.findMany({ where: { id: { in: phaseIds } } }),
+    prisma.user.findMany({ where: { id: { in: assigneeIds } } }),
+    prisma.taskUpdate.findMany({ where: { taskId: { in: taskIds } }, orderBy: { createdAt: "desc" } }),
+  ]);
+
+  const phaseById = new Map(phases.map((p) => [p.id, p]));
+  const assigneeById = new Map(assignees.map((a) => [a.id, a]));
+  const updatesByTaskId = new Map<string, typeof updates>();
+  for (const update of updates) {
+    const list = updatesByTaskId.get(update.taskId) ?? [];
+    list.push(update);
+    updatesByTaskId.set(update.taskId, list);
+  }
+
+  const tasksWithRelations = tasks.map((task) => ({
+    ...task,
+    phase: task.phaseId ? (phaseById.get(task.phaseId) ?? null) : null,
+    assignee: task.assigneeId ? (assigneeById.get(task.assigneeId) ?? null) : null,
+    updates: updatesByTaskId.get(task.id) ?? [],
+  }));
+
+  return NextResponse.json(tasksWithRelations);
 }
 
 export async function POST(

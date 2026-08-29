@@ -49,10 +49,6 @@ export async function GET(
         id: phaseId,
         projectId: id,
       },
-      include: {
-        tasks: true,
-        milestones: true,
-      },
     });
 
   if (!phase) {
@@ -62,7 +58,12 @@ export async function GET(
     );
   }
 
-  return NextResponse.json(phase);
+  const [tasks, milestones] = await Promise.all([
+    prisma.projectTask.findMany({ where: { phaseId: phase.id } }),
+    prisma.projectMilestone.findMany({ where: { phaseId: phase.id } }),
+  ]);
+
+  return NextResponse.json({ ...phase, tasks, milestones });
 }
 
 export async function PATCH(

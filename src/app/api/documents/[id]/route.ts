@@ -12,15 +12,16 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const document = await prisma.document.findUnique({
-    where: { id },
-    include: { project: true },
-  });
+  const document = await prisma.document.findUnique({ where: { id } });
   if (!document || document.deletedAt) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const documentProject = await prisma.project.findUnique({ where: { id: document.projectId } });
+  if (!documentProject) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   // Client Portal sessions never reach this route — middleware.ts routes
   // them to /api/client-portal/documents/[id] instead, which enforces the
   // clientVisible flag. This route stays staff-only.
-  if (!canAccessProject(session, document.project)) {
+  if (!canAccessProject(session, documentProject)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -52,9 +53,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const document = await prisma.document.findUnique({ where: { id }, include: { project: true } });
+  const document = await prisma.document.findUnique({ where: { id } });
   if (!document || document.deletedAt) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (!canAccessProject(session, document.project)) {
+
+  const documentProject = await prisma.project.findUnique({ where: { id: document.projectId } });
+  if (!documentProject) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (!canAccessProject(session, documentProject)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -76,9 +81,13 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const document = await prisma.document.findUnique({ where: { id }, include: { project: true } });
+  const document = await prisma.document.findUnique({ where: { id } });
   if (!document || document.deletedAt) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (!canAccessProject(session, document.project)) {
+
+  const documentProject = await prisma.project.findUnique({ where: { id: document.projectId } });
+  if (!documentProject) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (!canAccessProject(session, documentProject)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -40,40 +40,6 @@ export async function GET(
 
   const project = await prisma.project.findUnique({
     where: { id },
-    include: {
-      tasks: {
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          completion: true,
-          weight: true,
-          phaseId: true,
-        },
-      },
-
-      milestones: {
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          weight: true,
-          phaseId: true,
-        },
-      },
-
-      phases: {
-        select: {
-          id: true,
-          name: true,
-          weight: true,
-          sortOrder: true,
-        },
-        orderBy: {
-          sortOrder: "asc",
-        },
-      },
-    },
   });
 
   if (!project) {
@@ -90,8 +56,41 @@ export async function GET(
     );
   }
 
-  const tasks = project.tasks ?? [];
-  const milestones = project.milestones ?? [];
+  const [tasks, milestones, phases] = await Promise.all([
+    prisma.projectTask.findMany({
+      where: { projectId: id },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        completion: true,
+        weight: true,
+        phaseId: true,
+      },
+    }),
+    prisma.projectMilestone.findMany({
+      where: { projectId: id },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        weight: true,
+        phaseId: true,
+      },
+    }),
+    prisma.projectPhase.findMany({
+      where: { projectId: id },
+      select: {
+        id: true,
+        name: true,
+        weight: true,
+        sortOrder: true,
+      },
+      orderBy: {
+        sortOrder: "asc",
+      },
+    }),
+  ]);
 
   const taskProgress = calculateTaskProgress(tasks);
   const milestoneProgress =
@@ -110,7 +109,7 @@ export async function GET(
    * Its progress is therefore calculated from the tasks
    * and milestones belonging to that phase.
    */
-  const phaseProgress = project.phases.map((phase) => {
+  const phaseProgress = phases.map((phase) => {
     const phaseTasks = tasks.filter(
       (task) => task.phaseId === phase.id
     );
@@ -204,24 +203,6 @@ export async function PATCH(
 
   const project = await prisma.project.findUnique({
     where: { id },
-    include: {
-      tasks: {
-        select: {
-          id: true,
-          status: true,
-          completion: true,
-          weight: true,
-        },
-      },
-
-      milestones: {
-        select: {
-          id: true,
-          status: true,
-          weight: true,
-        },
-      },
-    },
   });
 
   if (!project) {
@@ -238,10 +219,30 @@ export async function PATCH(
     );
   }
 
+  const [tasks, milestones] = await Promise.all([
+    prisma.projectTask.findMany({
+      where: { projectId: id },
+      select: {
+        id: true,
+        status: true,
+        completion: true,
+        weight: true,
+      },
+    }),
+    prisma.projectMilestone.findMany({
+      where: { projectId: id },
+      select: {
+        id: true,
+        status: true,
+        weight: true,
+      },
+    }),
+  ]);
+
   const calculatedProgress =
     calculateProjectProgress({
-      tasks: project.tasks,
-      milestones: project.milestones,
+      tasks,
+      milestones,
     });
 
   const updatedProject =
@@ -260,10 +261,10 @@ export async function PATCH(
     progress: updatedProject.progress,
 
     tasks: {
-      total: project.tasks.length,
+      total: tasks.length,
 
       completed:
-        project.tasks.filter(
+        tasks.filter(
           (task) =>
             task.status === "COMPLETED" ||
             task.status === "VERIFIED"
@@ -271,15 +272,15 @@ export async function PATCH(
 
       progress:
         calculateTaskProgress(
-          project.tasks
+          tasks
         ),
     },
 
     milestones: {
-      total: project.milestones.length,
+      total: milestones.length,
 
       completed:
-        project.milestones.filter(
+        milestones.filter(
           (milestone) =>
             milestone.status === "COMPLETED" ||
             milestone.status === "APPROVED"
@@ -287,7 +288,7 @@ export async function PATCH(
 
       progress:
         calculateMilestoneProgress(
-          project.milestones
+          milestones
         ),
     },
   });

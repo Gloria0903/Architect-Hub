@@ -8,16 +8,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const document = await prisma.document.findUnique({ where: { id }, include: { project: true } });
+  const document = await prisma.document.findUnique({ where: { id } });
+
+  if (!document || document.deletedAt || !document.clientVisible) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const documentProject = await prisma.project.findUnique({ where: { id: document.projectId } });
 
   // Same rule as the client-portal project detail route: their own
   // project only, and only documents staff explicitly flagged visible.
-  if (
-    !document ||
-    document.deletedAt ||
-    document.project.clientId !== ctx.clientId ||
-    !document.clientVisible
-  ) {
+  if (!documentProject || documentProject.clientId !== ctx.clientId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

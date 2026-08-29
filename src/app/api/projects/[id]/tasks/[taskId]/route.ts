@@ -50,15 +50,6 @@ export async function GET(
         id: taskId,
         projectId: id,
       },
-      include: {
-        phase: true,
-        assignee: true,
-        updates: {
-          orderBy: {
-            createdAt: "desc",
-          },
-        },
-      },
     });
 
   if (!task) {
@@ -68,7 +59,20 @@ export async function GET(
     );
   }
 
-  return NextResponse.json(task);
+  const [phase, assignee, updates] = await Promise.all([
+    task.phaseId
+      ? prisma.projectPhase.findUnique({ where: { id: task.phaseId } })
+      : Promise.resolve(null),
+    task.assigneeId
+      ? prisma.user.findUnique({ where: { id: task.assigneeId } })
+      : Promise.resolve(null),
+    prisma.taskUpdate.findMany({
+      where: { taskId: task.id },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  return NextResponse.json({ ...task, phase, assignee, updates });
 }
 
 export async function PATCH(
@@ -178,45 +182,33 @@ export async function PATCH(
    * Recalculate overall project progress
    * whenever a task changes.
    */
-  const projectData =
-    await prisma.project.findUnique({
-      where: { id },
-      include: {
-        tasks: {
-          select: {
-            weight: true,
-            completion: true,
-            status: true,
-          },
-        },
+  const [projectTasks, projectMilestones] = await Promise.all([
+    prisma.projectTask.findMany({
+      where: { projectId: id },
+      select: { weight: true, completion: true, status: true },
+    }),
+    prisma.projectMilestone.findMany({
+      where: { projectId: id },
+      select: { weight: true, status: true },
+    }),
+  ]);
 
-        milestones: {
-          select: {
-            weight: true,
-            status: true,
-          },
-        },
-      },
-    });
+  // Single source of truth for the formula -- see
+  // src/lib/project-progress.ts. This used to be a hand-copied version
+  // of the same math living here too, which risked silently drifting
+  // out of sync with the real implementation if the formula ever
+  // changed in one place and not the other.
+  const calculatedProgress = calculateProjectProgress({
+    tasks: projectTasks,
+    milestones: projectMilestones,
+  });
 
-  if (projectData) {
-    // Single source of truth for the formula -- see
-    // src/lib/project-progress.ts. This used to be a hand-copied version
-    // of the same math living here too, which risked silently drifting
-    // out of sync with the real implementation if the formula ever
-    // changed in one place and not the other.
-    const calculatedProgress = calculateProjectProgress({
-      tasks: projectData.tasks,
-      milestones: projectData.milestones,
-    });
-
-    await prisma.project.update({
-      where: { id },
-      data: {
-        progress: calculatedProgress,
-      },
-    });
-  }
+  await prisma.project.update({
+    where: { id },
+    data: {
+      progress: calculatedProgress,
+    },
+  });
 
   return NextResponse.json(task);
 }
