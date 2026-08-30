@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { dayKey } from "@/lib/utils";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { useStore } from "@/store/app-store";
@@ -22,12 +23,12 @@ const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterProject, setFilterProject] = useState("all");
   const [filterAuthor, setFilterAuthor] = useState("all");
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = dayKey(new Date());
   // Daily logs are hands-on site reporting -- only ARCHITECT does that.
   // ADMIN and SENIOR_ARCHITECT are oversight roles, not expected to submit
   // one themselves (matches the same fix on the dashboard page).
   const architects = staff.filter(s => s.role === "ARCHITECT");
-  const submittedToday = logs.filter(l => l.date === today).map(l => l.authorId);
+  const submittedToday = logs.filter(l => dayKey(l.date) === today).map(l => l.authorId);
   const missingToday = architects.filter(a => !submittedToday.includes(a.id));
 
   const visible = logs

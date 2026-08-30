@@ -3,6 +3,7 @@ import { use, useMemo, useState } from "react";
 import { notFound, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { dayKey } from "@/lib/utils";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -103,12 +104,15 @@ export default function TakeOverProjectPage({ params }: { params: Promise<{ id: 
   const pendingApprovals = projectComments.filter(c => c.type === "APPROVAL" && !c.resolvedAt);
   const outstandingBalance = project.invoiced - project.paid;
 
-  // Has a log been submitted today? Compares by calendar day, not raw string,
-  // so this stays correct regardless of timezone/serialization format.
-  const todayKey = new Date().toISOString().split("T")[0];
-  const hasLogToday = projectLogs.some(l => new Date(l.date).toISOString().split("T")[0] === todayKey);
+  // Has a log been submitted today? Compares by calendar day in the
+  // firm's own timezone (Africa/Nairobi), not raw string or UTC, so
+  // this stays correct near local midnight -- see src/lib/utils.ts's
+  // dayKey for why toISOString() alone gets this wrong for a few
+  // hours around each day boundary.
+  const todayKey = dayKey(new Date());
+  const hasLogToday = projectLogs.some(l => dayKey(l.date) === todayKey);
   const daysSinceLastLog = latestLog
-    ? Math.floor((new Date(todayKey).getTime() - new Date(new Date(latestLog.date).toISOString().split("T")[0]).getTime()) / 86400000)
+    ? Math.floor((new Date(todayKey).getTime() - new Date(dayKey(latestLog.date)).getTime()) / 86400000)
     : null;
 
   // Unified per-project activity feed, same construction as the global

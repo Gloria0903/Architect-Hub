@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import { LayoutGrid, Folder, ClipboardList, Files, Wallet, MessageCircle, History, Users, Settings, Repeat, Building2, X, FileBarChart } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, dayKey } from "@/lib/utils";
 import { useStore } from "@/store/app-store";
 import { useFirmName } from "@/lib/use-firm-name";
 
@@ -55,8 +55,8 @@ export function Sidebar({
   const pathname = usePathname();
   const unreadNotifs = notifications.filter(n => !n.read).length;
   const unresolvedComments = comments.filter(c => !c.resolvedAt).length;
-  const today = new Date().toISOString().split("T")[0];
-  const todayLogs = logs.filter(l => l.date === today).length;
+  const today = dayKey(new Date());
+  const todayLogs = logs.filter(l => dayKey(l.date) === today).length;
 
   // Close the mobile drawer automatically whenever the route changes --
   // otherwise tapping a nav link on a phone leaves the drawer open over

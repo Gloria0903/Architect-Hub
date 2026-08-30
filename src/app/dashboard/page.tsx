@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { dayKey as sharedDayKey } from "@/lib/utils";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -45,15 +46,7 @@ export default function DashboardPage() {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  const dayKey = (value: string | Date) => {
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return "";
-    }
-
-    return date.toISOString().split("T")[0];
-  };
+  const dayKey = sharedDayKey;
 
   const safeNumber = (value: unknown, fallback = 0): number => {
     const number = Number(value);
